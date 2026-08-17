@@ -1,0 +1,23 @@
+{
+  "expo": {
+    "name": "MEDSAFE AI",
+    "slug": "medsafe-ai",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#F8FBFF"
+    },
+    "android": {
+      "package": "com.medsafeai.app"
+    },
+    "ios": {
+      "bundleIdentifier": "com.medsafeai.app"
+    },
+    "plugins": [
+      "expo-asset",
+      "expo-font"
+    ]
+  }
+}

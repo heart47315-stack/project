@@ -5,7 +5,10 @@ const DRUG_COLUMNS = 'drug_name,drug_type,dosage_form,active_ingredient,indicati
 export const searchDrugs = async (query = '') => {
   const trimmedQuery = String(query || '').trim();
 
+  console.log('[Drug search debug] query:', trimmedQuery);
+
   if (!trimmedQuery) {
+    console.log('[Drug search debug] empty query, skipping Supabase call');
     return { data: [], error: null };
   }
 
@@ -16,12 +19,17 @@ export const searchDrugs = async (query = '') => {
       .ilike('drug_name', `%${trimmedQuery}%`)
       .limit(20);
 
+    console.log('[Drug search debug] Supabase error:', error);
+    console.log('[Drug search debug] result count:', data?.length ?? 0);
+    console.log('[Drug search debug] first result:', data?.[0] ?? null);
+
     if (error) {
       return { data: [], error };
     }
 
     return { data: data || [], error: null };
   } catch (error) {
+    console.log('[Drug search debug] exception:', error?.message || error);
     return {
       data: [],
       error: {

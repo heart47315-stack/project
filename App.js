@@ -337,6 +337,8 @@ function DrugSafety({ go, onSelectDrug }) {
     let ignore = false;
     const trimmedQuery = q.trim();
 
+    console.log('[UI debug] search input:', trimmedQuery);
+
     if (!trimmedQuery) {
       setResults([]);
       setLoading(false);
@@ -350,9 +352,13 @@ function DrugSafety({ go, onSelectDrug }) {
       setLoading(true);
       setError('');
 
+      console.log('[UI debug] calling searchDrugs with:', trimmedQuery);
       const { data, error: searchError } = await searchDrugs(trimmedQuery);
 
       if (ignore) return;
+
+      console.log('[UI debug] returned data length:', data?.length ?? 0);
+      console.log('[UI debug] returned error:', searchError);
 
       if (searchError) {
         setResults([]);

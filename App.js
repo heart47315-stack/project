@@ -13,18 +13,13 @@ import {
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { supabase } from './src/lib/supabase';
 import { registerUser, loginUser, logoutUser, getCurrentUser } from './src/services/authService';
+import { searchDrugs } from './src/services/drugService';
 
 const BLUE = '#2F6FED';
 const DARK = '#18365F';
 const BORDER = '#DCE6F5';
 const GREEN = '#2DB77A';
 const RED = '#E95454';
-
-const medicines = [
-  { name: 'Paracetamol 500 mg', type: 'ยาแก้ปวด/ลดไข้', icon: 'pill', color: '#3977E8' },
-  { name: 'Amoxicillin 500 mg', type: 'ยาปฏิชีวนะ', icon: 'pill', color: '#43A6E8' },
-  { name: 'Ibuprofen 400 mg', type: 'ยาแก้อักเสบ', icon: 'pill', color: '#F19B45' },
-];
 
 function Logo({ small = false }) {
   return (
@@ -284,10 +279,12 @@ function Home({ go, user, profile }) {
         <View style={styles.history}>
           <Ionicons name="medkit-outline" size={23} color={BLUE} />
           <View style={{ flex: 1, marginLeft: 12 }}>
-            <Text style={styles.bold}>Paracetamol 500 mg</Text>
-            <Text style={styles.muted}>ตรวจสอบเมื่อ 16 ส.ค. 2026</Text>
+            <Text style={styles.bold}>ค้นหายา</Text>
+            <Text style={styles.muted}>ใช้ข้อมูลจากฐานข้อมูลยาใน Supabase</Text>
           </View>
-          <Text style={styles.link}>ดู</Text>
+          <Pressable onPress={() => go('drugs')}>
+            <Text style={styles.link}>ค้นหา</Text>
+          </Pressable>
         </View>
       </ScrollView>
       <BottomNav active="home" go={go} />
@@ -330,9 +327,50 @@ function MedicalAI({ go }) {
   );
 }
 
-function DrugSafety({ go }) {
+function DrugSafety({ go, onSelectDrug }) {
   const [q, setQ] = useState('');
-  const filtered = medicines.filter((m) => m.name.toLowerCase().includes(q.toLowerCase()));
+  const [results, setResults] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let ignore = false;
+    const trimmedQuery = q.trim();
+
+    if (!trimmedQuery) {
+      setResults([]);
+      setLoading(false);
+      setError('');
+      return () => {
+        ignore = true;
+      };
+    }
+
+    const fetchResults = async () => {
+      setLoading(true);
+      setError('');
+
+      const { data, error: searchError } = await searchDrugs(trimmedQuery);
+
+      if (ignore) return;
+
+      if (searchError) {
+        setResults([]);
+        setError(searchError.message || 'ไม่สามารถค้นหายาได้ในขณะนี้');
+      } else {
+        setResults(data || []);
+      }
+
+      setLoading(false);
+    };
+
+    const timeout = setTimeout(fetchResults, 250);
+
+    return () => {
+      ignore = true;
+      clearTimeout(timeout);
+    };
+  }, [q]);
 
   return (
     <SafeAreaView style={styles.screen}>
@@ -341,18 +379,42 @@ function DrugSafety({ go }) {
         <Text style={styles.sectionTitle}>ค้นหายา</Text>
         <View style={styles.search}>
           <Ionicons name="search" size={18} color="#8B9AB2" />
-          <TextInput value={q} onChangeText={setQ} placeholder="เช่น Paracetamol 500 mg" style={{ flex: 1 }} />
+          <TextInput value={q} onChangeText={setQ} placeholder="เช่น para" style={{ flex: 1 }} />
         </View>
 
+        {loading ? (
+          <View style={{ marginTop: 16, alignItems: 'center' }}>
+            <ActivityIndicator size="small" color={BLUE} />
+            <Text style={[styles.muted, { marginTop: 8 }]}>กำลังค้นหายา...</Text>
+          </View>
+        ) : null}
+
+        {error ? <Text style={styles.errorBox}>{error}</Text> : null}
+
+        {!loading && !error && q.trim() && results.length === 0 ? (
+          <Text style={[styles.muted, { marginTop: 14 }]}>ไม่พบยาที่ตรงกับคำค้นหา</Text>
+        ) : null}
+
+        {!loading && !q.trim() ? (
+          <Text style={[styles.muted, { marginTop: 14 }]}>พิมพ์ชื่อยาเพื่อค้นหาข้อมูลจาก Supabase</Text>
+        ) : null}
+
         <Text style={styles.sectionTitle}>ผลการค้นหา</Text>
-        {filtered.map((m) => (
-          <Pressable key={m.name} style={styles.medicine} onPress={() => go('drugDetail')}>
-            <View style={[styles.medicineIcon, { backgroundColor: `${m.color}22` }]}>
-              <MaterialCommunityIcons name="pill" size={26} color={m.color} />
+        {results.slice(0, 20).map((drug) => (
+          <Pressable
+            key={`${drug.drug_name}-${drug.source}`}
+            style={styles.medicine}
+            onPress={() => {
+              onSelectDrug(drug);
+              go('drugDetail');
+            }}
+          >
+            <View style={[styles.medicineIcon, { backgroundColor: '#EAF2FF' }]}>
+              <MaterialCommunityIcons name="pill" size={26} color={BLUE} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.bold}>{m.name}</Text>
-              <Text style={styles.muted}>{m.type}</Text>
+              <Text style={styles.bold}>{drug.drug_name || 'ไม่ระบุชื่อยา'}</Text>
+              <Text style={styles.muted}>{drug.drug_type || 'ไม่ระบุประเภทยา'}</Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color="#9AA8BA" />
           </Pressable>
@@ -371,33 +433,38 @@ function DrugSafety({ go }) {
   );
 }
 
-function DrugDetail({ go }) {
+function DrugDetail({ go, selectedDrug }) {
+  const drug = selectedDrug || {};
+  const details = [
+    ['ชื่อยา', drug.drug_name],
+    ['ประเภทยา', drug.drug_type],
+    ['รูปแบบยา', drug.dosage_form],
+    ['สารสำคัญ', drug.active_ingredient],
+    ['คำแนะนำ', drug.indication],
+    ['เงื่อนไข', drug.restriction],
+    ['คำเตือนและข้อควรระวัง', drug.precautions],
+    ['รายละเอียด', drug.description],
+    ['แหล่งข้อมูล', drug.source],
+  ];
+
   return (
     <SafeAreaView style={styles.screen}>
-      <Header title="Paracetamol 500 mg" go={go} />
+      <Header title={drug.drug_name || 'ข้อมูลยา'} go={go} />
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.drugHero}>
           <View style={styles.bigPill}><MaterialCommunityIcons name="pill" size={55} color={BLUE} /></View>
-          <Text style={styles.heroTitle}>Paracetamol 500 mg</Text>
-          <Text style={styles.muted}>ยาแก้ปวดและลดไข้</Text>
+          <Text style={styles.heroTitle}>{drug.drug_name || 'ไม่ระบุชื่อยา'}</Text>
+          <Text style={styles.muted}>{drug.drug_type || 'ไม่ระบุประเภทยา'}</Text>
         </View>
 
-        {['ข้อมูลยา', 'วิธีใช้', 'คำเตือน', 'อาการข้างเคียง'].map((t, i) => (
-          <View key={t} style={styles.infoBlock}>
-            <Text style={styles.cardTitle}>{t}</Text>
-            <Text style={styles.muted}>
-              {i === 0
-                ? 'ใช้สำหรับบรรเทาอาการปวดเล็กน้อยถึงปานกลางและลดไข้'
-                : i === 1
-                  ? 'รับประทานตามคำแนะนำบนฉลากหรือแพทย์สั่ง'
-                  : i === 2
-                    ? 'ไม่ควรใช้เกินขนาดที่แนะนำ และควรตรวจสอบยาที่มีส่วนผสมซ้ำกัน'
-                    : 'อาจพบคลื่นไส้ ผื่น หรืออาการแพ้ได้ในบางราย'}
-            </Text>
+        {details.map(([label, value]) => (
+          <View key={label} style={styles.infoBlock}>
+            <Text style={styles.cardTitle}>{label}</Text>
+            <Text style={styles.muted}>{value || '—'}</Text>
           </View>
         ))}
 
-        <Button title="ตรวจสอบความปลอดภัย" onPress={() => go('drugs')} />
+        <Button title="กลับหน้าค้นหา" onPress={() => go('drugs')} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -494,6 +561,7 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState(true);
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
+  const [selectedDrug, setSelectedDrug] = useState(null);
 
   const fetchProfile = async (currentUser) => {
     if (!currentUser?.id) return null;
@@ -632,8 +700,8 @@ export default function App() {
     register: <Register go={go} onSubmit={handleRegister} />,
     home: <Home go={go} user={user} profile={profile} />,
     chat: <MedicalAI go={go} />,
-    drugs: <DrugSafety go={go} />,
-    drugDetail: <DrugDetail go={go} />,
+    drugs: <DrugSafety go={go} onSelectDrug={setSelectedDrug} />,
+    drugDetail: <DrugDetail go={go} selectedDrug={selectedDrug} />,
     route: <SafeRoute go={go} />,
     profile: <Profile go={go} user={user} profile={profile} onLogout={handleLogout} />,
   };

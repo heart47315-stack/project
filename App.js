@@ -104,6 +104,10 @@ function Login({ go, onSubmit }) {
 
   const handleSubmit = async () => {
     setError('');
+    if (!email.trim() || !password) {
+      setError('กรุณากรอกอีเมลและรหัสผ่าน');
+      return;
+    }
     setLoading(true);
     try {
       const result = await onSubmit({ email, password });
@@ -166,6 +170,10 @@ function Register({ go, onSubmit }) {
 
   const handleSubmit = async () => {
     setError('');
+    if (!fullName.trim() || !email.trim() || !password || !confirmPassword) {
+      setError('กรุณากรอกข้อมูลให้ครบถ้วน');
+      return;
+    }
     if (!accepted) {
       setError('กรุณายอมรับเงื่อนไขการใช้งานก่อนสมัครสมาชิก');
       return;
@@ -240,7 +248,8 @@ function Register({ go, onSubmit }) {
   );
 }
 
-function Home({ go, user, profile }) {
+function Home({ go, user, profile, onSearch }) {
+  const [query, setQuery] = useState('');
   const cards = [
     ['Medical AI', 'ถามคำถามทางการแพทย์', 'meditation', 'chat'],
     ['Drug Safety', 'ตรวจสอบข้อมูลยาและความปลอดภัย', 'pill', 'drugs'],
@@ -261,7 +270,19 @@ function Home({ go, user, profile }) {
 
         <View style={styles.search}>
           <Ionicons name="search" size={18} color="#8B9AB2" />
-          <TextInput placeholder="ค้นหาข้อมูลยา อาการ..." style={{ flex: 1 }} />
+          <TextInput
+            value={query}
+            onChangeText={setQuery}
+            onSubmitEditing={() => onSearch(query)}
+            placeholder="ค้นหาข้อมูลยา อาการ..."
+            returnKeyType="search"
+            style={{ flex: 1 }}
+          />
+          {query ? (
+            <Pressable accessibilityLabel="ล้างคำค้นหา" onPress={() => setQuery('')}>
+              <Ionicons name="close-circle" size={18} color="#8B9AB2" />
+            </Pressable>
+          ) : null}
         </View>
 
         {cards.map(([title, desc, icon, target]) => (
@@ -302,7 +323,7 @@ function MedicalAI({ go }) {
 
   const send = () => {
     if (!msg.trim()) return;
-    setMessages([...messages, { me: true, text: msg.trim() }]);
+    setMessages((currentMessages) => [...currentMessages, { me: true, text: msg.trim() }]);
     setMsg('');
   };
 
@@ -327,8 +348,8 @@ function MedicalAI({ go }) {
   );
 }
 
-function DrugSafety({ go, onSelectDrug }) {
-  const [q, setQ] = useState('');
+function DrugSafety({ go, onSelectDrug, initialQuery = '' }) {
+  const [q, setQ] = useState(initialQuery);
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -568,6 +589,7 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [selectedDrug, setSelectedDrug] = useState(null);
+  const [drugQuery, setDrugQuery] = useState('');
 
   const fetchProfile = async (currentUser) => {
     if (!currentUser?.id) return null;
@@ -587,6 +609,10 @@ export default function App() {
   };
 
   const go = (s) => setScreen(s);
+  const searchFromHome = (query) => {
+    setDrugQuery(query.trim());
+    setScreen('drugs');
+  };
 
   const handleLogin = async ({ email, password }) => {
     const response = await loginUser({ email, password });
@@ -704,9 +730,9 @@ export default function App() {
     onboard3: <Onboarding go={go} step="onboard3" />,
     login: <Login go={go} onSubmit={handleLogin} />,
     register: <Register go={go} onSubmit={handleRegister} />,
-    home: <Home go={go} user={user} profile={profile} />,
+    home: <Home go={go} user={user} profile={profile} onSearch={searchFromHome} />,
     chat: <MedicalAI go={go} />,
-    drugs: <DrugSafety go={go} onSelectDrug={setSelectedDrug} />,
+    drugs: <DrugSafety go={go} onSelectDrug={setSelectedDrug} initialQuery={drugQuery} />,
     drugDetail: <DrugDetail go={go} selectedDrug={selectedDrug} />,
     route: <SafeRoute go={go} />,
     profile: <Profile go={go} user={user} profile={profile} onLogout={handleLogout} />,

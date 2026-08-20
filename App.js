@@ -31,7 +31,7 @@ function Logo({ small = false }) {
       {!small && (
         <View>
           <Text style={styles.logoText}>MEDSAFE AI</Text>
-          <Text style={styles.logoSub}>AI-Powered Health Assistant</Text>
+          <Text style={styles.logoSub}>ผู้ช่วยสุขภาพอัจฉริยะด้วย AI</Text>
         </View>
       )}
     </View>
@@ -57,7 +57,7 @@ function Splash({ go }) {
       <View style={styles.splashCenter}>
         <Logo />
         <MaterialCommunityIcons name="human" size={155} color="#76A7F7" style={{ marginTop: 22 }} />
-        <Text style={styles.splashTag}>Your Health, Our Priority</Text>
+        <Text style={styles.splashTag}>สุขภาพของคุณ คือสิ่งสำคัญของเรา</Text>
       </View>
       <Pressable onPress={() => go('onboard1')} style={styles.skip}>
         <Text style={styles.muted}>เริ่มต้นใช้งาน →</Text>
@@ -68,9 +68,9 @@ function Splash({ go }) {
 
 function Onboarding({ go, step }) {
   const data = {
-    onboard1: ['Medical AI', 'ถามคำถามเกี่ยวกับสุขภาพ\nค้นหาข้อมูลทางการแพทย์\nด้วย AI อัจฉริยะ', 'human'],
-    onboard2: ['Drug Safety', 'ตรวจสอบข้อมูลยาและ\nการใช้ยาอย่างปลอดภัย\nเพื่อความปลอดภัย', 'pill'],
-    onboard3: ['SafeRoute AI', 'วิเคราะห์เส้นทางและ\nความเสี่ยงโดย AI\nเพื่อการเดินทางที่ปลอดภัย', 'map-marker-path'],
+    onboard1: ['AI ด้านสุขภาพ', 'ถามคำถามเกี่ยวกับสุขภาพ\nค้นหาข้อมูลทางการแพทย์\nด้วย AI อัจฉริยะ', 'human'],
+    onboard2: ['ความปลอดภัยด้านยา', 'ตรวจสอบข้อมูลยาและ\nการใช้ยาอย่างปลอดภัย\nเพื่อสุขภาพที่ดีขึ้น', 'pill'],
+    onboard3: ['เส้นทางปลอดภัยด้วย AI', 'วิเคราะห์เส้นทางและ\nความเสี่ยงโดย AI\nเพื่อการเดินทางที่ปลอดภัย', 'map-marker-path'],
   }[step];
 
   return (
@@ -251,9 +251,9 @@ function Register({ go, onSubmit }) {
 function Home({ go, user, profile, onSearch }) {
   const [query, setQuery] = useState('');
   const cards = [
-    ['Medical AI', 'ถามคำถามทางการแพทย์', 'meditation', 'chat'],
-    ['Drug Safety', 'ตรวจสอบข้อมูลยาและความปลอดภัย', 'pill', 'drugs'],
-    ['SafeRoute AI', 'วิเคราะห์เส้นทางที่ปลอดภัย', 'map-marker-path', 'route'],
+    ['AI ด้านสุขภาพ', 'ถามคำถามทางการแพทย์', 'meditation', 'chat'],
+    ['ความปลอดภัยด้านยา', 'ตรวจสอบข้อมูลยาและความปลอดภัย', 'pill', 'drugs'],
+    ['เส้นทางปลอดภัยด้วย AI', 'วิเคราะห์เส้นทางที่ปลอดภัย', 'map-marker-path', 'route'],
   ];
   const displayName = profile?.full_name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'ผู้ใช้งาน';
 
@@ -301,7 +301,7 @@ function Home({ go, user, profile, onSearch }) {
           <Ionicons name="medkit-outline" size={23} color={BLUE} />
           <View style={{ flex: 1, marginLeft: 12 }}>
             <Text style={styles.bold}>ค้นหายา</Text>
-            <Text style={styles.muted}>ใช้ข้อมูลจากฐานข้อมูลยาใน Supabase</Text>
+            <Text style={styles.muted}>ใช้ข้อมูลจากฐานข้อมูลยา</Text>
           </View>
           <Pressable onPress={() => go('drugs')}>
             <Text style={styles.link}>ค้นหา</Text>
@@ -329,7 +329,7 @@ function MedicalAI({ go }) {
 
   return (
     <SafeAreaView style={styles.screen}>
-      <Header title="Medical AI" go={go} />
+      <Header title="AI ด้านสุขภาพ" go={go} />
       <ScrollView contentContainerStyle={styles.chat}>
         {messages.map((m, i) => (
           <View key={i} style={[styles.bubble, m.me ? styles.me : styles.ai]}>
@@ -401,12 +401,12 @@ function DrugSafety({ go, onSelectDrug, initialQuery = '' }) {
 
   return (
     <SafeAreaView style={styles.screen}>
-      <Header title="Drug Safety" go={go} />
+      <Header title="ความปลอดภัยด้านยา" go={go} />
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.sectionTitle}>ค้นหายา</Text>
         <View style={styles.search}>
           <Ionicons name="search" size={18} color="#8B9AB2" />
-          <TextInput value={q} onChangeText={setQ} placeholder="เช่น para" style={{ flex: 1 }} />
+          <TextInput value={q} onChangeText={setQ} placeholder="เช่น พาราเซตามอล หรือ paracetamol" style={{ flex: 1 }} />
         </View>
 
         {loading ? (
@@ -423,7 +423,7 @@ function DrugSafety({ go, onSelectDrug, initialQuery = '' }) {
         ) : null}
 
         {!loading && !q.trim() ? (
-          <Text style={[styles.muted, { marginTop: 14 }]}>พิมพ์ชื่อยาเพื่อค้นหาข้อมูลจาก Supabase</Text>
+          <Text style={[styles.muted, { marginTop: 14 }]}>พิมพ์ชื่อยา ชื่อสารสำคัญ หรือรายละเอียดเป็นภาษาไทยได้</Text>
         ) : null}
 
         <Text style={styles.sectionTitle}>ผลการค้นหา</Text>
@@ -450,7 +450,7 @@ function DrugSafety({ go, onSelectDrug, initialQuery = '' }) {
         <View style={styles.safeBox}>
           <Ionicons name="shield-checkmark" size={28} color={GREEN} />
           <View style={{ flex: 1, marginLeft: 12 }}>
-            <Text style={styles.bold}>Drug Interaction Checker</Text>
+            <Text style={styles.bold}>ตรวจสอบการใช้ยาร่วมกัน</Text>
             <Text style={styles.muted}>ตรวจสอบการใช้ยาร่วมกันอย่างปลอดภัย</Text>
           </View>
         </View>
@@ -500,7 +500,7 @@ function DrugDetail({ go, selectedDrug }) {
 function SafeRoute({ go }) {
   return (
     <SafeAreaView style={styles.screen}>
-      <Header title="SafeRoute AI" go={go} />
+      <Header title="เส้นทางปลอดภัยด้วย AI" go={go} />
       <View style={styles.mapMock}>
         <View style={styles.mapGrid} />
         <View style={styles.routeLine} />
@@ -514,7 +514,7 @@ function SafeRoute({ go }) {
 
       <View style={styles.routeCard}>
         <View style={styles.score}><Text style={styles.scoreNum}>87</Text><Text style={styles.score100}>/100</Text></View>
-        <Text style={styles.risk}>● ความเสี่ยงต่ำ (Low Risk)</Text>
+        <Text style={styles.risk}>● ความเสี่ยงต่ำ</Text>
         <Text style={styles.muted}>ใช้ข้อมูลสภาพถนน พื้นที่เสี่ยง และปัจจัยแวดล้อมเพื่อแนะนำเส้นทาง</Text>
         <Button title="วิเคราะห์เส้นทาง" onPress={() => {}} />
       </View>
@@ -567,7 +567,7 @@ function BottomNav({ active, go }) {
     ['home', 'home', 'หน้าหลัก'],
     ['chat', 'chatbubble-ellipses-outline', 'AI'],
     ['drugs', 'medkit-outline', 'ยา'],
-    ['route', 'location-outline', 'Route'],
+    ['route', 'location-outline', 'เส้นทาง'],
     ['profile', 'person-outline', 'โปรไฟล์'],
   ];
 

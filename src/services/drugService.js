@@ -43,7 +43,7 @@ export const searchDrugs = async (query = '') => {
     return {
       data: [],
       error: {
-        message: error?.message || 'Unable to search drugs right now.',
+        message: 'ไม่สามารถค้นหาข้อมูลยาได้ในขณะนี้ กรุณาลองใหม่อีกครั้ง',
       },
     };
   }

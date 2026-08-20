@@ -15,17 +15,24 @@ export const searchDrugs = async (query = '') => {
 
   try {
     const searchPattern = `%${trimmedQuery}%`;
-    let request = supabase
+    const searchableColumns = [
+      'drug_name',
+      'drug_type',
+      'dosage_form',
+      'active_ingredient',
+      'indication',
+      'description',
+      'restriction',
+      'precautions',
+      'source',
+    ];
+    const searchFilters = searchableColumns
+      .map((column) => `${column}.ilike.${searchPattern}`)
+      .join(',');
+    const request = supabase
       .from('drugs')
       .select(DRUG_COLUMNS)
-      .ilike('drug_name', searchPattern);
-
-    if (/[\u0E00-\u0E7F]/.test(trimmedQuery)) {
-      request = supabase
-        .from('drugs')
-        .select(DRUG_COLUMNS)
-        .or(`drug_name.ilike.${searchPattern},active_ingredient.ilike.${searchPattern},description.ilike.${searchPattern}`);
-    }
+      .or(searchFilters);
 
     const { data, error } = await request.limit(20);
 

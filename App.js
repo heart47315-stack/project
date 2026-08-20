@@ -338,7 +338,14 @@ function MedicalAI({ go }) {
         ))}
       </ScrollView>
       <View style={styles.composer}>
-        <TextInput value={msg} onChangeText={setMsg} placeholder="พิมพ์คำถาม..." style={{ flex: 1 }} />
+        <TextInput
+          value={msg}
+          onChangeText={setMsg}
+          placeholder="พิมพ์คำถามเป็นภาษาไทยหรือภาษาอังกฤษ..."
+          multiline
+          textAlignVertical="center"
+          style={{ flex: 1, maxHeight: 90 }}
+        />
         <Pressable onPress={send} style={styles.send}>
           <Ionicons name="send" color="#fff" size={18} />
         </Pressable>
@@ -406,7 +413,15 @@ function DrugSafety({ go, onSelectDrug, initialQuery = '' }) {
         <Text style={styles.sectionTitle}>ค้นหายา</Text>
         <View style={styles.search}>
           <Ionicons name="search" size={18} color="#8B9AB2" />
-          <TextInput value={q} onChangeText={setQ} placeholder="เช่น พาราเซตามอล หรือ paracetamol" style={{ flex: 1 }} />
+          <TextInput
+            value={q}
+            onChangeText={setQ}
+            placeholder="พิมพ์ชื่อยา เช่น พาราเซตามอล หรือ paracetamol"
+            autoCapitalize="none"
+            autoCorrect={false}
+            returnKeyType="search"
+            style={{ flex: 1 }}
+          />
         </View>
 
         {loading ? (

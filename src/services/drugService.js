@@ -1,57 +1,33 @@
 import { supabase } from '../lib/supabase';
 
 const DRUG_COLUMNS = 'drug_name,drug_type,dosage_form,active_ingredient,indication,description,restriction,precautions,source';
+const SEARCHABLE_COLUMNS = ['drug_name', 'drug_type', 'dosage_form', 'active_ingredient', 'indication'];
 
-export const searchDrugs = async (query = '') => {
-  const trimmedQuery = String(query || '').trim();
+const friendlyError = () => ({
+  message: 'ไม่สามารถค้นหาข้อมูลยาได้ในขณะนี้ กรุณาลองใหม่อีกครั้ง',
+});
 
-  console.log('SEARCH_QUERY', trimmedQuery);
-
-  if (!trimmedQuery) {
-    console.log('RESULT_COUNT', 0);
-    console.log('FIRST_RESULT', null);
-    return { data: [], error: null };
-  }
+export async function searchDrugs(query = '', { page = 0, pageSize = 20 } = {}) {
+  const trimmedQuery = String(query).trim();
+  if (!trimmedQuery) return { data: [], count: 0, error: null };
 
   try {
+    const safePage = Math.max(0, Number(page) || 0);
+    const safePageSize = Math.min(50, Math.max(1, Number(pageSize) || 20));
     const searchPattern = `%${trimmedQuery}%`;
-    const searchableColumns = [
-      'drug_name',
-      'drug_type',
-      'dosage_form',
-      'active_ingredient',
-      'indication',
-      'description',
-      'restriction',
-      'precautions',
-      'source',
-    ];
-    const searchFilters = searchableColumns
+    const searchFilters = SEARCHABLE_COLUMNS
       .map((column) => `${column}.ilike.${searchPattern}`)
       .join(',');
-    const request = supabase
+    const { data, error, count } = await supabase
       .from('drugs')
-      .select(DRUG_COLUMNS)
-      .or(searchFilters);
+      .select(DRUG_COLUMNS, { count: 'exact' })
+      .or(searchFilters)
+      .order('drug_name', { ascending: true })
+      .range(safePage * safePageSize, safePage * safePageSize + safePageSize - 1);
 
-    const { data, error } = await request.limit(20);
-
-    console.log('SUPABASE_ERROR', error);
-    console.log('RESULT_COUNT', data?.length ?? 0);
-    console.log('FIRST_RESULT', data?.[0] ?? null);
-
-    if (error) {
-      return { data: [], error };
-    }
-
-    return { data: data || [], error: null };
-  } catch (error) {
-    console.log('SUPABASE_ERROR', error);
-    return {
-      data: [],
-      error: {
-        message: 'ไม่สามารถค้นหาข้อมูลยาได้ในขณะนี้ กรุณาลองใหม่อีกครั้ง',
-      },
-    };
+    if (error) return { data: [], count: 0, error: friendlyError() };
+    return { data: data || [], count: count || 0, error: null };
+  } catch {
+    return { data: [], count: 0, error: friendlyError() };
   }
-};
+}

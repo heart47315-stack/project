@@ -10,14 +10,16 @@
       "backgroundColor": "#F8FBFF"
     },
     "android": {
-      "package": "com.medsafeai.app"
+      "package": "com.medsafeai.app",
+      "permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"]
     },
     "ios": {
       "bundleIdentifier": "com.medsafeai.app"
     },
     "plugins": [
       "expo-asset",
-      "expo-font"
+      "expo-font",
+      ["expo-location", { "locationWhenInUsePermission": "อนุญาตให้ MEDSAFE AI ใช้ตำแหน่งเพื่อประเมินความเสี่ยงของเส้นทาง" }]
     ],
     "extra": {
       "eas": {

@@ -1,0 +1,11 @@
+# Local secrets: tracked historical copies must be removed from Git's index.
+.env
+.env.*
+!.env.example
+
+# Generated Expo artifacts
+.expo/
+.expo-export/
+dist/
+*.log
+node_modules

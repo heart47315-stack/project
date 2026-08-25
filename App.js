@@ -9,10 +9,12 @@ import {
   StyleSheet,
   StatusBar,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import * as Location from 'expo-location';
 import { supabase } from './src/lib/supabase';
-import { registerUser, loginUser, logoutUser, getCurrentUser } from './src/services/authService';
+import { registerUser, loginUser, logoutUser, getCurrentUser, requestPasswordReset } from './src/services/authService';
 import { searchDrugs } from './src/services/drugService';
 
 const BLUE = '#2F6FED';
@@ -96,7 +98,7 @@ function Onboarding({ go, step }) {
   );
 }
 
-function Login({ go, onSubmit }) {
+function Login({ go, onSubmit, onForgot }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -147,10 +149,10 @@ function Login({ go, onSubmit }) {
           onChangeText={setPassword}
         />
 
-        <Pressable style={styles.forgot}><Text style={styles.link}>ลืมรหัสผ่าน?</Text></Pressable>
+        <Pressable style={styles.forgot} onPress={() => onForgot(email)}><Text style={styles.link}>ลืมรหัสผ่าน?</Text></Pressable>
         <Button title="เข้าสู่ระบบ" onPress={handleSubmit} loading={loading} />
         <Text style={styles.or}>หรือ</Text>
-        <Button title="ดำเนินการต่อด้วย Google" secondary icon="logo-google" onPress={() => go('home')} />
+        <Text style={[styles.muted, { textAlign: 'center', marginTop: 14 }]}>Google Login ยังไม่ได้เปิดใช้งานใน Supabase configuration</Text>
         <Pressable onPress={() => go('register')}>
           <Text style={styles.register}>ยังไม่มีบัญชี? <Text style={styles.link}>สมัครสมาชิก</Text></Text>
         </Pressable>
@@ -315,22 +317,21 @@ function Home({ go, user, profile, onSearch }) {
 
 function MedicalAI({ go }) {
   const [msg, setMsg] = useState('');
-  const [messages, setMessages] = useState([
-    { me: false, text: 'สวัสดีค่ะ ฉันคือ MedSafe AI ผู้ช่วยด้านสุขภาพของคุณ มีอะไรให้ช่วยไหมคะ?' },
-    { me: true, text: 'ถ้ารู้สึกตัวร้อนเหมือนจะเป็นไข้ ควรดูแลตัวเองอย่างไร?' },
-    { me: false, text: 'พักผ่อนให้เพียงพอ ดื่มน้ำมากขึ้น และวัดอุณหภูมิเป็นระยะ หากมีไข้สูง หายใจลำบาก หรืออาการรุนแรงขึ้น ควรพบแพทย์ค่ะ' },
-  ]);
+  const [messages, setMessages] = useState([]);
+  const [error, setError] = useState('ยังไม่มี Medical AI/RAG endpoint ที่ผ่านการตรวจสอบ จึงไม่แสดงคำตอบที่สร้างขึ้นโดยไม่มีแหล่งอ้างอิง');
 
   const send = () => {
     if (!msg.trim()) return;
     setMessages((currentMessages) => [...currentMessages, { me: true, text: msg.trim() }]);
     setMsg('');
+    setError('ยังส่งคำถามไม่ได้จนกว่าจะตั้งค่า RAG endpoint ที่คืน citations จริง');
   };
 
   return (
     <SafeAreaView style={styles.screen}>
       <Header title="AI ด้านสุขภาพ" go={go} />
       <ScrollView contentContainerStyle={styles.chat}>
+        {error ? <Text style={styles.errorBox}>{error}</Text> : null}
         {messages.map((m, i) => (
           <View key={i} style={[styles.bubble, m.me ? styles.me : styles.ai]}>
             <Text style={m.me ? styles.meText : styles.text}>{m.text}</Text>
@@ -513,25 +514,43 @@ function DrugDetail({ go, selectedDrug }) {
 }
 
 function SafeRoute({ go }) {
+  const [loading, setLoading] = useState(false);
+  const [location, setLocation] = useState(null);
+  const [error, setError] = useState('SafeRoute ถูกระงับ: ยังไม่มี Google Routes API, accident dataset และ ML model ที่ผ่านการทดสอบ จึงไม่สามารถแสดง route หรือ risk score ได้');
+
+  const assessCurrentLocation = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const permission = await Location.requestForegroundPermissionsAsync();
+      if (permission.status !== 'granted') {
+        setError('กรุณาอนุญาตตำแหน่งเพื่อประเมินความเสี่ยงบริเวณปัจจุบัน');
+        return;
+      }
+      const current = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const coords = current.coords;
+      setLocation(coords);
+      setError('พบตำแหน่งปัจจุบันแล้ว แต่การคำนวณความเสี่ยงยัง BLOCKED จนกว่าจะมี model ที่ผ่านการประเมินจาก accident dataset จริง');
+    } catch {
+      setError('ไม่สามารถอ่านตำแหน่งปัจจุบันได้ กรุณาลองใหม่');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.screen}>
       <Header title="เส้นทางปลอดภัยด้วย AI" go={go} />
-      <View style={styles.mapMock}>
-        <View style={styles.mapGrid} />
-        <View style={styles.routeLine} />
-        <View style={[styles.pin, { top: '32%', left: '24%' }]}><Ionicons name="location" size={34} color={BLUE} /></View>
-        <View style={[styles.pin, { top: '63%', right: '23%' }]}><Ionicons name="location" size={34} color={RED} /></View>
-        <View style={styles.mapLabel}>
-          <Text style={styles.bold}>เส้นทางแนะนำ</Text>
-          <Text style={styles.muted}>วิเคราะห์ความเสี่ยงด้วย AI</Text>
-        </View>
+      <View style={styles.locationPanel}>
+        <Ionicons name="navigate-circle-outline" size={76} color={BLUE} />
+        <Text style={styles.bold}>ประเมินตำแหน่งปัจจุบัน</Text>
+        <Text style={[styles.muted, { textAlign: 'center', marginTop: 6 }]}>ต้องเชื่อมผู้ให้บริการ directions และข้อมูลอุบัติเหตุที่ตรวจสอบได้ก่อนจึงจะแสดงแผนที่และเส้นทาง</Text>
       </View>
 
       <View style={styles.routeCard}>
-        <View style={styles.score}><Text style={styles.scoreNum}>87</Text><Text style={styles.score100}>/100</Text></View>
-        <Text style={styles.risk}>● ความเสี่ยงต่ำ</Text>
-        <Text style={styles.muted}>ใช้ข้อมูลสภาพถนน พื้นที่เสี่ยง และปัจจัยแวดล้อมเพื่อแนะนำเส้นทาง</Text>
-        <Button title="วิเคราะห์เส้นทาง" onPress={() => {}} />
+        {location ? <Text style={styles.muted}>ตำแหน่งปัจจุบัน: {location.latitude.toFixed(5)}, {location.longitude.toFixed(5)}</Text> : null}
+        {error ? <Text style={styles.errorBox}>{error}</Text> : null}
+        <Button title="ประเมินตำแหน่งปัจจุบัน" onPress={assessCurrentLocation} loading={loading} />
       </View>
       <BottomNav active="route" go={go} />
     </SafeAreaView>
@@ -668,6 +687,15 @@ export default function App() {
     return { data: response.data };
   };
 
+  const handleForgotPassword = async (email) => {
+    const response = await requestPasswordReset(email);
+    if (response.error) {
+      Alert.alert('รีเซ็ตรหัสผ่าน', response.error.message);
+      return;
+    }
+    Alert.alert('ส่งอีเมลแล้ว', 'กรุณาตรวจสอบอีเมลเพื่อดำเนินการตั้งรหัสผ่านใหม่');
+  };
+
   const handleLogout = async () => {
     const response = await logoutUser();
     if (response.error) {
@@ -743,7 +771,7 @@ export default function App() {
     onboard1: <Onboarding go={go} step="onboard1" />,
     onboard2: <Onboarding go={go} step="onboard2" />,
     onboard3: <Onboarding go={go} step="onboard3" />,
-    login: <Login go={go} onSubmit={handleLogin} />,
+    login: <Login go={go} onSubmit={handleLogin} onForgot={handleForgotPassword} />,
     register: <Register go={go} onSubmit={handleRegister} />,
     home: <Home go={go} user={user} profile={profile} onSearch={searchFromHome} />,
     chat: <MedicalAI go={go} />,
@@ -831,6 +859,7 @@ const styles = StyleSheet.create({
   bigPill: { width: 100, height: 100, borderRadius: 28, backgroundColor: '#EEF5FF', alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
   infoBlock: { backgroundColor: '#fff', borderWidth: 1, borderColor: BORDER, borderRadius: 13, padding: 15, marginBottom: 10 },
   mapMock: { flex: 1, margin: 14, borderRadius: 18, overflow: 'hidden', backgroundColor: '#EAF2E7', position: 'relative' },
+  locationPanel: { flex: 1, margin: 14, borderRadius: 18, backgroundColor: '#EEF5FF', alignItems: 'center', justifyContent: 'center', padding: 26 },
   mapGrid: { ...StyleSheet.absoluteFillObject, opacity: 0.35, backgroundColor: '#DCE8D6' },
   routeLine: { position: 'absolute', width: 230, height: 10, backgroundColor: '#6C9DF2', transform: [{ rotate: '-28deg' }], top: '52%', left: '18%', borderRadius: 10 },
   pin: { position: 'absolute' },

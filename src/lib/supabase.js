@@ -2,12 +2,14 @@ import 'react-native-url-polyfill/auto';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl =
-  process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://ymhlnsfgutmfczsezpnk.supabase.co';
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
 
-console.log('[Supabase debug] URL loaded:', Boolean(supabaseUrl));
-console.log('[Supabase debug] anon key loaded:', Boolean(supabaseAnonKey));
+// Expo only exposes EXPO_PUBLIC_* values to the client. Never use a service
+// role key in this file or in an Expo public environment variable.
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error('Missing EXPO_PUBLIC_SUPABASE_URL or EXPO_PUBLIC_SUPABASE_ANON_KEY.');
+}
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
@@ -20,5 +22,5 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 
 export const supabaseConfig = {
   url: supabaseUrl,
-  anonKey: supabaseAnonKey,
+  configured: Boolean(supabaseUrl && supabaseAnonKey),
 };

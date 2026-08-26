@@ -10,12 +10,19 @@ import {
   StatusBar,
   ActivityIndicator,
   Alert,
+  RefreshControl,
+  Switch,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { supabase } from './src/lib/supabase';
 import { registerUser, loginUser, logoutUser, getCurrentUser, requestPasswordReset } from './src/services/authService';
 import { searchDrugs } from './src/services/drugService';
+import { getProfile, updateProfile } from './src/services/profileService';
+import { getUsageHistory, addUsageHistory } from './src/services/historyService';
+import { getSavedItems, saveItem, removeSavedItem, isItemSaved } from './src/services/savedService';
+import { getUserSettings, updateUserSettings } from './src/services/settingsService';
+import appPackage from './package.json';
 
 const BLUE = '#2F6FED';
 const DARK = '#18365F';
@@ -315,14 +322,16 @@ function Home({ go, user, profile, onSearch }) {
   );
 }
 
-function MedicalAI({ go }) {
+function MedicalAI({ go, onHistory }) {
   const [msg, setMsg] = useState('');
   const [messages, setMessages] = useState([]);
   const [error, setError] = useState('ยังไม่มี Medical AI/RAG endpoint ที่ผ่านการตรวจสอบ จึงไม่แสดงคำตอบที่สร้างขึ้นโดยไม่มีแหล่งอ้างอิง');
 
   const send = () => {
     if (!msg.trim()) return;
-    setMessages((currentMessages) => [...currentMessages, { me: true, text: msg.trim() }]);
+    const question = msg.trim();
+    setMessages((currentMessages) => [...currentMessages, { me: true, text: question }]);
+    onHistory?.({ action_type: 'medical_ai', title: 'ใช้งาน Medical AI', description: question, metadata: { query: question } });
     setMsg('');
     setError('ยังส่งคำถามไม่ได้จนกว่าจะตั้งค่า RAG endpoint ที่คืน citations จริง');
   };
@@ -356,7 +365,7 @@ function MedicalAI({ go }) {
   );
 }
 
-function DrugSafety({ go, onSelectDrug, initialQuery = '' }) {
+function DrugSafety({ go, onSelectDrug, initialQuery = '', onHistory }) {
   const [q, setQ] = useState(initialQuery);
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -394,6 +403,7 @@ function DrugSafety({ go, onSelectDrug, initialQuery = '' }) {
         setError(searchError.message || 'ไม่สามารถค้นหายาได้ในขณะนี้');
       } else {
         setResults(data || []);
+        if (data?.length) onHistory?.({ action_type: 'drug_search', title: 'ค้นหายา', description: trimmedQuery, metadata: { query: trimmedQuery } });
       }
 
       setLoading(false);
@@ -449,6 +459,7 @@ function DrugSafety({ go, onSelectDrug, initialQuery = '' }) {
             style={styles.medicine}
             onPress={() => {
               onSelectDrug(drug);
+              onHistory?.({ action_type: 'drug_detail', title: 'เปิดรายละเอียดยา', description: drug.drug_name || '', metadata: { drug_name: drug.drug_name } });
               go('drugDetail');
             }}
           >
@@ -476,8 +487,34 @@ function DrugSafety({ go, onSelectDrug, initialQuery = '' }) {
   );
 }
 
-function DrugDetail({ go, selectedDrug }) {
+function DrugDetail({ go, selectedDrug, userId, onToggleSave }) {
   const drug = selectedDrug || {};
+  const itemId = `${drug.drug_name || ''}:${drug.source || ''}`;
+  const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    if (!userId || !drug.drug_name) return undefined;
+    isItemSaved(userId, 'drug', itemId).then((result) => {
+      if (mounted && !result.error) setSaved(result.data);
+    });
+    return () => { mounted = false; };
+  }, [userId, itemId, drug.drug_name]);
+
+  const toggleSaved = async () => {
+    setSaving(true);
+    let result;
+    if (saved) {
+      const current = await isItemSaved(userId, 'drug', itemId);
+      result = current.error ? current : current.item?.id ? await removeSavedItem(userId, current.item.id) : { error: new Error('ไม่พบรายการที่บันทึก') };
+    } else {
+      result = await saveItem(userId, { item_type: 'drug', item_id: itemId, title: drug.drug_name, description: drug.description, metadata: drug });
+    }
+    setSaving(false);
+    if (result.error) Alert.alert('รายการที่บันทึก', result.error.message || 'ไม่สามารถบันทึกรายการได้');
+    else { setSaved(!saved); onToggleSave?.(); }
+  };
   const details = [
     ['ชื่อยา', drug.drug_name],
     ['ประเภทยา', drug.drug_type],
@@ -507,13 +544,14 @@ function DrugDetail({ go, selectedDrug }) {
           </View>
         ))}
 
+        <Button title={saved ? 'ยกเลิกการบันทึก' : 'บันทึกยา'} secondary={saved} loading={saving} onPress={toggleSaved} icon={saved ? 'bookmark' : 'bookmark-outline'} />
         <Button title="กลับหน้าค้นหา" onPress={() => go('drugs')} />
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-function SafeRoute({ go }) {
+function SafeRoute({ go, onHistory }) {
   const [loading, setLoading] = useState(false);
   const [location, setLocation] = useState(null);
   const [error, setError] = useState('SafeRoute ถูกระงับ: ยังไม่มี Google Routes API, accident dataset และ ML model ที่ผ่านการทดสอบ จึงไม่สามารถแสดง route หรือ risk score ได้');
@@ -530,6 +568,7 @@ function SafeRoute({ go }) {
       const current = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
       const coords = current.coords;
       setLocation(coords);
+      onHistory?.({ action_type: 'safe_route', title: 'ใช้งาน SafeRoute', description: 'ประเมินตำแหน่งปัจจุบัน', metadata: { accuracy: coords.accuracy } });
       setError('พบตำแหน่งปัจจุบันแล้ว แต่การคำนวณความเสี่ยงยัง BLOCKED จนกว่าจะมี model ที่ผ่านการประเมินจาก accident dataset จริง');
     } catch {
       setError('ไม่สามารถอ่านตำแหน่งปัจจุบันได้ กรุณาลองใหม่');
@@ -559,7 +598,7 @@ function SafeRoute({ go }) {
 
 function Profile({ go, user, profile, onLogout }) {
   const displayName = profile?.full_name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'ผู้ใช้งาน';
-  const displayEmail = user?.email || profile?.email || 'example@email.com';
+  const displayEmail = user?.email || profile?.email || '';
 
   return (
     <SafeAreaView style={styles.screen}>
@@ -571,11 +610,17 @@ function Profile({ go, user, profile, onLogout }) {
           <Text style={styles.muted}>{displayEmail}</Text>
         </View>
 
-        {['ข้อมูลส่วนตัว', 'ประวัติการใช้งาน', 'รายการที่บันทึก', 'ตั้งค่า', 'เกี่ยวกับ MedSafe AI'].map((x) => (
-          <Pressable key={x} style={styles.menu}>
+        {[
+          ['ข้อมูลส่วนตัว', 'personalInfo', 'person-outline'],
+          ['ประวัติการใช้งาน', 'history', 'time-outline'],
+          ['รายการที่บันทึก', 'saved', 'bookmark-outline'],
+          ['ตั้งค่า', 'settings', 'settings-outline'],
+          ['เกี่ยวกับ MedSafe AI', 'about', 'information-circle-outline'],
+        ].map(([label, target, icon]) => (
+          <Pressable key={target} style={styles.menu} onPress={() => go(target)}>
             <Ionicons name="chevron-forward" size={20} color="#8EA0B8" />
-            <Text style={{ flex: 1 }}>{x}</Text>
-            <Ionicons name="person-outline" size={21} color={BLUE} />
+            <Text style={{ flex: 1 }}>{label}</Text>
+            <Ionicons name={icon} size={21} color={BLUE} />
           </Pressable>
         ))}
 
@@ -584,6 +629,60 @@ function Profile({ go, user, profile, onLogout }) {
       <BottomNav active="profile" go={go} />
     </SafeAreaView>
   );
+}
+
+function PersonalInfo({ go, user, profile, onSaved }) {
+  const [values, setValues] = useState({ ...profile, email: profile?.email || user?.email || '' });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  useEffect(() => setValues({ ...profile, email: profile?.email || user?.email || '' }), [profile, user?.email]);
+  const setValue = (key, value) => setValues((current) => ({ ...current, [key]: value }));
+  const save = async () => {
+    if (!values.full_name?.trim() || !values.email?.trim()) { setError('กรุณากรอกชื่อและอีเมล'); return; }
+    if ((values.height && Number.isNaN(Number(values.height))) || (values.weight && Number.isNaN(Number(values.weight)))) { setError('ส่วนสูงและน้ำหนักต้องเป็นตัวเลข'); return; }
+    if (values.date_of_birth && !/^\d{4}-\d{2}-\d{2}$/.test(values.date_of_birth)) { setError('วันเกิดต้องอยู่ในรูปแบบ YYYY-MM-DD'); return; }
+    setLoading(true); setError('');
+    const result = await updateProfile(user.id, values);
+    setLoading(false);
+    if (result.error) setError(result.error.message || 'บันทึกข้อมูลไม่สำเร็จ');
+    else { onSaved(result.data); Alert.alert('ข้อมูลส่วนตัว', 'บันทึกข้อมูลเรียบร้อยแล้ว'); }
+  };
+  const fields = [['full_name', 'ชื่อ-นามสกุล'], ['email', 'อีเมล'], ['date_of_birth', 'วันเกิด (YYYY-MM-DD)'], ['gender', 'เพศ'], ['height', 'ส่วนสูง'], ['weight', 'น้ำหนัก'], ['blood_type', 'กรุ๊ปเลือด']];
+  return <SafeAreaView style={styles.screen}><Header title="ข้อมูลส่วนตัว" go={go} /><ScrollView contentContainerStyle={styles.content}>
+    {error ? <Text style={styles.errorBox}>{error}</Text> : null}
+    {fields.map(([key, label]) => <View key={key}><Text style={styles.label}>{label}</Text><TextInput style={styles.input} value={values[key] == null ? '' : String(values[key])} onChangeText={(text) => setValue(key, text)} keyboardType={['height', 'weight'].includes(key) ? 'numeric' : 'default'} /></View>)}
+    <Button title="บันทึกข้อมูล" onPress={save} loading={loading} />
+  </ScrollView></SafeAreaView>;
+}
+
+function History({ go, userId }) {
+  const [items, setItems] = useState([]); const [loading, setLoading] = useState(true); const [refreshing, setRefreshing] = useState(false); const [error, setError] = useState('');
+  const load = async (isRefresh = false) => { isRefresh ? setRefreshing(true) : setLoading(true); setError(''); const result = await getUsageHistory(userId); if (result.error) setError(result.error.message || 'ไม่สามารถโหลดประวัติได้'); else setItems(result.data); isRefresh ? setRefreshing(false) : setLoading(false); };
+  useEffect(() => { load(); }, [userId]);
+  return <SafeAreaView style={styles.screen}><Header title="ประวัติการใช้งาน" go={go} /><ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} />}>
+    {loading ? <ActivityIndicator color={BLUE} /> : error ? <Text style={styles.errorBox}>{error}</Text> : items.length === 0 ? <Text style={styles.empty}>{'ยังไม่มีประวัติการใช้งาน'}</Text> : items.map((item) => <View style={styles.infoBlock} key={item.id}><Text style={styles.cardTitle}>{item.title}</Text><Text style={styles.muted}>{item.description || 'ไม่มีรายละเอียด'}</Text><Text style={styles.muted}>{item.action_type} · {new Date(item.created_at).toLocaleString('th-TH')}</Text></View>)}
+  </ScrollView></SafeAreaView>;
+}
+
+function Saved({ go, userId, onChanged }) {
+  const [items, setItems] = useState([]); const [loading, setLoading] = useState(true); const [error, setError] = useState('');
+  const load = async () => { setLoading(true); setError(''); const result = await getSavedItems(userId); if (result.error) setError(result.error.message || 'ไม่สามารถโหลดรายการบันทึกได้'); else setItems(result.data); setLoading(false); };
+  useEffect(() => { load(); }, [userId]);
+  const remove = async (id) => { const result = await removeSavedItem(userId, id); if (result.error) Alert.alert('ลบรายการ', result.error.message || 'ลบรายการไม่สำเร็จ'); else { setItems((current) => current.filter((item) => item.id !== id)); onChanged?.(); } };
+  return <SafeAreaView style={styles.screen}><Header title="รายการที่บันทึก" go={go} /><ScrollView contentContainerStyle={styles.content}>
+    {loading ? <ActivityIndicator color={BLUE} /> : error ? <Text style={styles.errorBox}>{error}</Text> : items.length === 0 ? <Text style={styles.empty}>{'ยังไม่มีรายการที่บันทึก'}</Text> : items.map((item) => <View style={styles.infoBlock} key={item.id}><Text style={styles.cardTitle}>{item.title}</Text><Text style={styles.muted}>{item.description || 'ไม่มีรายละเอียด'}</Text><Text style={styles.muted}>{item.item_type} · {new Date(item.created_at).toLocaleString('th-TH')}</Text><Button title="ลบรายการ" secondary icon="trash-outline" onPress={() => remove(item.id)} /></View>)}
+  </ScrollView></SafeAreaView>;
+}
+
+function Settings({ go, userId }) {
+  const [settings, setSettings] = useState(null); const [loading, setLoading] = useState(true); const [error, setError] = useState('');
+  useEffect(() => { getUserSettings(userId).then((result) => { if (result.error) setError(result.error.message || 'ไม่สามารถโหลดการตั้งค่าได้'); else setSettings(result.data); setLoading(false); }); }, [userId]);
+  const toggle = async (value) => { setSettings((current) => ({ ...current, notifications_enabled: value })); const result = await updateUserSettings(userId, { notifications_enabled: value }); if (result.error) { setError(result.error.message || 'บันทึกการตั้งค่าไม่สำเร็จ'); setSettings((current) => ({ ...current, notifications_enabled: !value })); } };
+  return <SafeAreaView style={styles.screen}><Header title="ตั้งค่า" go={go} /><ScrollView contentContainerStyle={styles.content}>{loading ? <ActivityIndicator color={BLUE} /> : error ? <Text style={styles.errorBox}>{error}</Text> : <><View style={styles.settingRow}><Text style={styles.cardTitle}>การแจ้งเตือน</Text><Switch value={Boolean(settings?.notifications_enabled)} onValueChange={toggle} trackColor={{ true: '#A9C4FA' }} thumbColor={BLUE} /></View><View style={styles.infoBlock}><Text style={styles.cardTitle}>ภาษา</Text><Text style={styles.muted}>{settings?.language || 'th'}</Text></View></>}</ScrollView></SafeAreaView>;
+}
+
+function About({ go }) {
+  return <SafeAreaView style={styles.screen}><Header title="เกี่ยวกับ MedSafe AI" go={go} /><ScrollView contentContainerStyle={styles.content}><Logo /><Text style={styles.heroTitle}>MEDSAFE AI</Text><Text style={styles.centerText}>ผู้ช่วยสุขภาพอัจฉริยะด้วย AI</Text><View style={styles.infoBlock}><Text style={styles.cardTitle}>เวอร์ชัน</Text><Text style={styles.muted}>{appPackage.version}</Text></View><View style={styles.infoBlock}><Text style={styles.cardTitle}>คำอธิบายแอป</Text><Text style={styles.muted}>ช่วยค้นหาข้อมูลยาและสนับสนุนการดูแลสุขภาพจากข้อมูลที่มีแหล่งอ้างอิง</Text></View><View style={styles.infoBlock}><Text style={styles.cardTitle}>แหล่งข้อมูลยา</Text><Text style={styles.muted}>ฐานข้อมูลยาและแหล่งข้อมูลที่จัดเก็บในโปรเจกต์ MEDSAFE AI</Text></View><Text style={styles.errorBox}>AI ไม่ใช่แพทย์ ข้อมูลนี้ไม่ใช่การวินิจฉัยหรือคำแนะนำทางการแพทย์</Text></ScrollView></SafeAreaView>;
 }
 
 function Header({ title, go }) {
@@ -622,30 +721,39 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState(true);
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
+  const [history, setHistory] = useState([]);
+  const [savedItems, setSavedItems] = useState([]);
+  const [settings, setSettings] = useState(null);
   const [selectedDrug, setSelectedDrug] = useState(null);
   const [drugQuery, setDrugQuery] = useState('');
 
-  const fetchProfile = async (currentUser) => {
+  const loadUserData = async (currentUser) => {
     if (!currentUser?.id) return null;
-
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', currentUser.id)
-      .maybeSingle();
-
-    if (error) {
-      console.warn('fetchProfile error:', error.message);
-      return null;
-    }
-
-    return data;
+    const [profileResult, settingsResult, historyResult, savedResult] = await Promise.all([
+      getProfile(currentUser.id), getUserSettings(currentUser.id), getUsageHistory(currentUser.id), getSavedItems(currentUser.id),
+    ]);
+    if (profileResult.error) console.warn('getProfile error:', profileResult.error.message);
+    if (settingsResult.error) console.warn('getUserSettings error:', settingsResult.error.message);
+    if (historyResult.error) console.warn('getUsageHistory error:', historyResult.error.message);
+    if (savedResult.error) console.warn('getSavedItems error:', savedResult.error.message);
+    setProfile(profileResult.data);
+    setSettings(settingsResult.data);
+    setHistory(historyResult.data || []);
+    setSavedItems(savedResult.data || []);
+    return profileResult.data;
   };
 
   const go = (s) => setScreen(s);
   const searchFromHome = (query) => {
     setDrugQuery(query.trim());
     setScreen('drugs');
+  };
+
+  const recordHistory = async (payload) => {
+    const result = await addUsageHistory(user?.id, payload);
+    if (result.error) console.warn('addUsageHistory error:', result.error.message);
+    else setHistory((current) => [result.data, ...current]);
+    return result;
   };
 
   const handleLogin = async ({ email, password }) => {
@@ -655,9 +763,8 @@ export default function App() {
     }
 
     const currentUser = response.data?.user;
-    const profileData = await fetchProfile(currentUser);
     setUser(currentUser);
-    setProfile(profileData);
+    await loadUserData(currentUser);
     setScreen('home');
     return { data: response.data };
   };
@@ -680,9 +787,8 @@ export default function App() {
       };
     }
 
-    const profileData = await fetchProfile(currentUser);
     setUser(currentUser);
-    setProfile(profileData || { full_name: fullName, email });
+    await loadUserData(currentUser);
     setScreen('home');
     return { data: response.data };
   };
@@ -705,6 +811,9 @@ export default function App() {
 
     setUser(null);
     setProfile(null);
+    setHistory([]);
+    setSavedItems([]);
+    setSettings(null);
     setScreen('login');
   };
 
@@ -717,8 +826,7 @@ export default function App() {
 
       if (data) {
         setUser(data);
-        const profileData = await fetchProfile(data);
-        setProfile(profileData);
+        await loadUserData(data);
         setScreen('home');
       } else {
         setScreen('login');
@@ -734,12 +842,14 @@ export default function App() {
 
       if (session?.user) {
         setUser(session.user);
-        const profileData = await fetchProfile(session.user);
-        setProfile(profileData || { full_name: session.user.user_metadata?.full_name || '', email: session.user.email || '' });
+        await loadUserData(session.user);
         setScreen('home');
       } else {
         setUser(null);
         setProfile(null);
+        setHistory([]);
+        setSavedItems([]);
+        setSettings(null);
         setScreen('login');
       }
 
@@ -774,11 +884,16 @@ export default function App() {
     login: <Login go={go} onSubmit={handleLogin} onForgot={handleForgotPassword} />,
     register: <Register go={go} onSubmit={handleRegister} />,
     home: <Home go={go} user={user} profile={profile} onSearch={searchFromHome} />,
-    chat: <MedicalAI go={go} />,
-    drugs: <DrugSafety go={go} onSelectDrug={setSelectedDrug} initialQuery={drugQuery} />,
-    drugDetail: <DrugDetail go={go} selectedDrug={selectedDrug} />,
-    route: <SafeRoute go={go} />,
+    chat: <MedicalAI go={go} onHistory={recordHistory} />,
+    drugs: <DrugSafety go={go} onSelectDrug={setSelectedDrug} initialQuery={drugQuery} onHistory={recordHistory} />,
+    drugDetail: <DrugDetail go={go} selectedDrug={selectedDrug} userId={user?.id} onToggleSave={async () => { const result = await getSavedItems(user?.id); if (!result.error) setSavedItems(result.data); }} />,
+    route: <SafeRoute go={go} onHistory={recordHistory} />,
     profile: <Profile go={go} user={user} profile={profile} onLogout={handleLogout} />,
+    personalInfo: <PersonalInfo go={go} user={user} profile={profile} onSaved={setProfile} />,
+    history: <History go={go} userId={user?.id} />,
+    saved: <Saved go={go} userId={user?.id} onChanged={async () => { const result = await getSavedItems(user?.id); if (!result.error) setSavedItems(result.data); }} />,
+    settings: <Settings go={go} userId={user?.id} />,
+    about: <About go={go} />,
   };
 
   return (
@@ -873,4 +988,6 @@ const styles = StyleSheet.create({
   profileAvatar: { width: 86, height: 86, borderRadius: 43, backgroundColor: '#DCE9FF', alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
   profileAvatarText: { fontSize: 28, color: BLUE, fontWeight: '800' },
   menu: { height: 57, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#EDF1F7', flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 15 },
+  empty: { color: '#7186A3', textAlign: 'center', paddingVertical: 35 },
+  settingRow: { backgroundColor: '#fff', borderWidth: 1, borderColor: BORDER, borderRadius: 13, padding: 15, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
 });

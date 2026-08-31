@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import {
   SafeAreaView,
   View,
@@ -12,11 +12,19 @@ import {
   Alert,
   RefreshControl,
   Switch,
+  Linking,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { supabase } from './src/lib/supabase';
-import { registerUser, loginUser, logoutUser, getCurrentUser, requestPasswordReset } from './src/services/authService';
+import {
+  registerUser,
+  loginUser,
+  logoutUser,
+  getCurrentUser,
+  requestPasswordReset,
+  updatePassword,
+} from './src/services/authService';
 import { searchDrugs } from './src/services/drugService';
 import { getProfile, updateProfile } from './src/services/profileService';
 import { getUsageHistory, addUsageHistory } from './src/services/historyService';
@@ -252,6 +260,140 @@ function Register({ go, onSubmit }) {
         </Pressable>
 
         <Button title="สมัครสมาชิก" onPress={handleSubmit} loading={loading} />
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+function ForgotPassword({ go, onSubmit }) {
+  const [email, setEmail] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+
+  const handleSubmit = async () => {
+    setMessage('');
+    setError('');
+    if (!email.trim()) {
+      setError('กรุณากรอกอีเมล');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const result = await onSubmit(email);
+      if (result?.error) {
+        setError(result.error.message || 'ไม่สามารถส่งอีเมลได้');
+        return;
+      }
+      setMessage(
+        `ส่งลิงก์เปลี่ยนรหัสผ่านไปที่ ${email.trim().toLowerCase()} แล้ว\nกรุณาเปิดอีเมลและกดลิงก์ ระบบจะเปิดแอปเพื่อให้ตั้งรหัสผ่านใหม่`
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <SafeAreaView style={styles.screen}>
+      <ScrollView contentContainerStyle={styles.auth}>
+        <View style={styles.authBackRow}>
+          <Pressable accessibilityLabel="ย้อนกลับ" onPress={() => go('login')} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={23} color={DARK} />
+            <Text style={styles.backText}>ย้อนกลับ</Text>
+          </Pressable>
+        </View>
+
+        <Logo />
+        <Text style={styles.authTitle}>ลืมรหัสผ่าน</Text>
+        <Text style={[styles.muted, { marginBottom: 18 }]}>
+          กรอกอีเมลที่ใช้สมัครสมาชิก แล้วเราจะส่งลิงก์สำหรับตั้งรหัสผ่านใหม่ให้
+        </Text>
+
+        {error ? <Text style={styles.errorBox}>{error}</Text> : null}
+        {message ? <Text style={styles.successBox}>{message}</Text> : null}
+
+        <Text style={styles.label}>อีเมล</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="example@email.com"
+          keyboardType="email-address"
+          autoCapitalize="none"
+          value={email}
+          onChangeText={setEmail}
+        />
+
+        <Button title="ส่งอีเมลเปลี่ยนรหัสผ่าน" onPress={handleSubmit} loading={loading} />
+        <Pressable onPress={() => go('login')} style={{ marginTop: 16 }}>
+          <Text style={[styles.link, { textAlign: 'center' }]}>กลับไปหน้าเข้าสู่ระบบ</Text>
+        </Pressable>
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+function ResetPassword({ go, onSubmit }) {
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async () => {
+    setError('');
+
+    if (!password || !confirmPassword) {
+      setError('กรุณากรอกรหัสผ่านใหม่ให้ครบถ้วน');
+      return;
+    }
+    if (password.length < 8) {
+      setError('รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร');
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError('ยืนยันรหัสผ่านไม่ตรงกัน');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const result = await onSubmit(password);
+      if (result?.error) {
+        setError(result.error.message || 'เปลี่ยนรหัสผ่านไม่สำเร็จ');
+        return;
+      }
+      Alert.alert('เปลี่ยนรหัสผ่านสำเร็จ', 'รหัสผ่านใหม่ถูกบันทึกใน Supabase แล้ว', [
+        { text: 'เข้าสู่ระบบ', onPress: () => go('login') },
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <SafeAreaView style={styles.screen}>
+      <ScrollView contentContainerStyle={styles.auth}>
+        <View style={styles.authBackRow}>
+          <Pressable accessibilityLabel="ย้อนกลับ" onPress={() => go('login')} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={23} color={DARK} />
+            <Text style={styles.backText}>ย้อนกลับ</Text>
+          </Pressable>
+        </View>
+
+        <Logo />
+        <Text style={styles.authTitle}>ตั้งรหัสผ่านใหม่</Text>
+        <Text style={[styles.muted, { marginBottom: 18 }]}>
+          ตั้งรหัสผ่านใหม่อย่างน้อย 8 ตัวอักษร
+        </Text>
+
+        {error ? <Text style={styles.errorBox}>{error}</Text> : null}
+
+        <Text style={styles.label}>รหัสผ่านใหม่</Text>
+        <TextInput style={styles.input} placeholder="อย่างน้อย 8 ตัวอักษร" secureTextEntry value={password} onChangeText={setPassword} />
+
+        <Text style={styles.label}>ยืนยันรหัสผ่านใหม่</Text>
+        <TextInput style={styles.input} placeholder="กรอกรหัสผ่านอีกครั้ง" secureTextEntry value={confirmPassword} onChangeText={setConfirmPassword} />
+
+        <Button title="บันทึกรหัสผ่านใหม่" onPress={handleSubmit} loading={loading} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -726,6 +868,7 @@ export default function App() {
   const [settings, setSettings] = useState(null);
   const [selectedDrug, setSelectedDrug] = useState(null);
   const [drugQuery, setDrugQuery] = useState('');
+  const pendingRecoveryRef = useRef(false);
 
   const loadUserData = async (currentUser) => {
     if (!currentUser?.id) return null;
@@ -794,12 +937,22 @@ export default function App() {
   };
 
   const handleForgotPassword = async (email) => {
-    const response = await requestPasswordReset(email);
-    if (response.error) {
-      Alert.alert('รีเซ็ตรหัสผ่าน', response.error.message);
-      return;
-    }
-    Alert.alert('ส่งอีเมลแล้ว', 'กรุณาตรวจสอบอีเมลเพื่อดำเนินการตั้งรหัสผ่านใหม่');
+    return requestPasswordReset(email);
+  };
+
+  const handleUpdatePassword = async (password) => {
+    const response = await updatePassword(password);
+    if (response.error) return response;
+
+    // Password recovery sessions are short-lived and should not leave the
+    // user stuck on the reset screen after a successful update.
+    await supabase.auth.signOut();
+    setUser(null);
+    setProfile(null);
+    setHistory([]);
+    setSavedItems([]);
+    setSettings(null);
+    return response;
   };
 
   const handleLogout = async () => {
@@ -820,14 +973,89 @@ export default function App() {
   useEffect(() => {
     let mounted = true;
 
+    const parseAuthUrl = (url) => {
+      const result = { code: null, type: null, accessToken: null, refreshToken: null };
+      if (!url) return result;
+
+      const queryIndex = url.indexOf('?');
+      const hashIndex = url.indexOf('#');
+      const queryPart =
+        queryIndex >= 0
+          ? url.slice(queryIndex + 1, hashIndex >= 0 ? hashIndex : undefined)
+          : '';
+      const hashPart = hashIndex >= 0 ? url.slice(hashIndex + 1) : '';
+
+      const parseParams = (value) => {
+        const params = {};
+        value.split('&').forEach((pair) => {
+          if (!pair) return;
+          const [rawKey, ...rawValue] = pair.split('=');
+          const key = decodeURIComponent(rawKey || '');
+          const val = decodeURIComponent(rawValue.join('=') || '');
+          if (key) params[key] = val;
+        });
+        return params;
+      };
+
+      const query = parseParams(queryPart);
+      const hash = parseParams(hashPart);
+
+      result.code = query.code || hash.code || null;
+      result.type = query.type || hash.type || null;
+      result.accessToken = hash.access_token || query.access_token || null;
+      result.refreshToken = hash.refresh_token || query.refresh_token || null;
+      return result;
+    };
+
+    const handleAuthUrl = async (url) => {
+      const auth = parseAuthUrl(url);
+      if (!auth.code && !auth.accessToken) return;
+
+      const isRecovery = auth.type === 'recovery';
+      if (isRecovery) pendingRecoveryRef.current = true;
+
+      let error = null;
+
+      if (auth.code) {
+        const result = await supabase.auth.exchangeCodeForSession(auth.code);
+        error = result.error;
+      } else if (auth.accessToken && auth.refreshToken) {
+        const result = await supabase.auth.setSession({
+          access_token: auth.accessToken,
+          refresh_token: auth.refreshToken,
+        });
+        error = result.error;
+      }
+
+      if (!mounted) return;
+
+      if (error) {
+        pendingRecoveryRef.current = false;
+        Alert.alert(
+          isRecovery ? 'ลิงก์เปลี่ยนรหัสผ่านหมดอายุ' : 'ยืนยันอีเมลไม่สำเร็จ',
+          'กรุณาขอลิงก์ใหม่แล้วลองอีกครั้ง'
+        );
+        setScreen('login');
+        return;
+      }
+
+      if (isRecovery) {
+        setScreen('resetPassword');
+      }
+    };
+
     const initializeSession = async () => {
+      const initialUrl = await Linking.getInitialURL();
+      if (initialUrl) await handleAuthUrl(initialUrl);
+      if (!mounted) return;
+
       const { data } = await getCurrentUser();
       if (!mounted) return;
 
       if (data) {
         setUser(data);
         await loadUserData(data);
-        setScreen('home');
+        if (!pendingRecoveryRef.current) setScreen('home');
       } else {
         setScreen('login');
       }
@@ -837,8 +1065,21 @@ export default function App() {
 
     initializeSession();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const linkingSubscription = Linking.addEventListener('url', ({ url }) => {
+      handleAuthUrl(url);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return;
+
+      if (event === 'PASSWORD_RECOVERY' || pendingRecoveryRef.current) {
+        if (session?.user) {
+          setUser(session.user);
+          await loadUserData(session.user);
+        }
+        setScreen('resetPassword');
+        return;
+      }
 
       if (session?.user) {
         setUser(session.user);
@@ -858,6 +1099,7 @@ export default function App() {
 
     return () => {
       mounted = false;
+      linkingSubscription.remove();
       subscription.unsubscribe();
     };
   }, []);
@@ -881,8 +1123,10 @@ export default function App() {
     onboard1: <Onboarding go={go} step="onboard1" />,
     onboard2: <Onboarding go={go} step="onboard2" />,
     onboard3: <Onboarding go={go} step="onboard3" />,
-    login: <Login go={go} onSubmit={handleLogin} onForgot={handleForgotPassword} />,
+    login: <Login go={go} onSubmit={handleLogin} onForgot={() => go('forgotPassword')} />,
     register: <Register go={go} onSubmit={handleRegister} />,
+    forgotPassword: <ForgotPassword go={go} onSubmit={handleForgotPassword} />,
+    resetPassword: <ResetPassword go={go} onSubmit={handleUpdatePassword} />,
     home: <Home go={go} user={user} profile={profile} onSearch={searchFromHome} />,
     chat: <MedicalAI go={go} onHistory={recordHistory} />,
     drugs: <DrugSafety go={go} onSelectDrug={setSelectedDrug} initialQuery={drugQuery} onHistory={recordHistory} />,
@@ -932,6 +1176,10 @@ const styles = StyleSheet.create({
   buttonText: { color: '#fff', fontWeight: '800', fontSize: 15 },
   buttonTextSecondary: { color: BLUE },
   muted: { color: '#7D90AA', fontSize: 12, lineHeight: 18 },
+  authBackRow: { width: '100%', marginBottom: 12 },
+  backButton: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, alignSelf: 'flex-start' },
+  backText: { color: DARK, fontSize: 15, fontWeight: '600', marginLeft: 6 },
+  successBox: { width: '100%', backgroundColor: '#E9F8F1', borderWidth: 1, borderColor: '#A9E3C8', color: '#147A4C', padding: 12, borderRadius: 10, marginTop: 14, lineHeight: 21 },
   auth: { padding: 24, flexGrow: 1, justifyContent: 'center' },
   authTitle: { fontSize: 25, fontWeight: '800', color: DARK, marginTop: 30, marginBottom: 5 },
   label: { fontSize: 12, color: '#526B8D', fontWeight: '700', marginTop: 18, marginBottom: 7 },

@@ -144,3 +144,95 @@ export async function getHospitals(limit = 50) {
     error,
   };
 }
+
+async function ensureUserAccess(userId) {
+  if (!userId) {
+    return { user: null, error: null };
+  }
+
+  const { data, error } = await supabase.auth.getUser();
+
+  if (error) {
+    return { user: null, error };
+  }
+
+  if (!data?.user) {
+    return {
+      user: null,
+      error: new Error('ไม่พบผู้ใช้งานปัจจุบัน'),
+    };
+  }
+
+  if (data.user.id !== userId) {
+    return {
+      user: null,
+      error: new Error('ไม่ได้รับอนุญาตให้เข้าถึงข้อมูลนี้'),
+    };
+  }
+
+  return { user: data.user, error: null };
+}
+
+export async function getUsageHistory(userId) {
+  if (!userId) {
+    return {
+      data: [],
+      error: null,
+    };
+  }
+
+  const auth = await ensureUserAccess(userId);
+  if (auth.error) {
+    return {
+      data: [],
+      error: auth.error,
+    };
+  }
+
+  const { data, error } = await supabase
+    .from('usage_history')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+
+  return {
+    data: data || [],
+    error,
+  };
+}
+
+export async function addUsageHistory(userId, payload = {}) {
+  if (!userId) {
+    return {
+      data: null,
+      error: new Error('ต้องระบุ userId ก่อนบันทึกประวัติการใช้งาน'),
+    };
+  }
+
+  const auth = await ensureUserAccess(userId);
+  if (auth.error) {
+    return {
+      data: null,
+      error: auth.error,
+    };
+  }
+
+  const record = {
+    user_id: userId,
+    action_type: payload.action_type || 'activity',
+    title: payload.title || 'ประวัติการใช้งาน',
+    description: payload.description || '',
+    metadata: payload.metadata || {},
+  };
+
+  const { data, error } = await supabase
+    .from('usage_history')
+    .insert(record)
+    .select()
+    .single();
+
+  return {
+    data,
+    error,
+  };
+}

@@ -181,6 +181,11 @@ function Register({ go, onSubmit }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [dateOfBirth, setDateOfBirth] = useState('');
+  const [gender, setGender] = useState('');
+  const [height, setHeight] = useState('');
+  const [weight, setWeight] = useState('');
+  const [bloodType, setBloodType] = useState('');
   const [accepted, setAccepted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -199,10 +204,32 @@ function Register({ go, onSubmit }) {
       setError('ยืนยันรหัสผ่านไม่ตรงกัน');
       return;
     }
+    if (height && Number.isNaN(Number(height))) {
+      setError('ส่วนสูงต้องเป็นตัวเลข');
+      return;
+    }
+    if (weight && Number.isNaN(Number(weight))) {
+      setError('น้ำหนักต้องเป็นตัวเลข');
+      return;
+    }
+    if (dateOfBirth && !/^\d{4}-\d{2}-\d{2}$/.test(dateOfBirth)) {
+      setError('วันเกิดต้องอยู่ในรูปแบบ YYYY-MM-DD');
+      return;
+    }
 
     setLoading(true);
     try {
-      const result = await onSubmit({ fullName, email, password, confirmPassword });
+      const result = await onSubmit({
+        fullName,
+        email,
+        password,
+        confirmPassword,
+        dateOfBirth,
+        gender,
+        height,
+        weight,
+        bloodType,
+      });
       if (result?.error) {
         setError(result.error.message || 'สมัครสมาชิกไม่สำเร็จ กรุณาลองใหม่');
       }
@@ -236,6 +263,51 @@ function Register({ go, onSubmit }) {
           onChangeText={setEmail}
         />
 
+        <Text style={styles.label}>วันเกิด (YYYY-MM-DD)</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="2026-01-31"
+          value={dateOfBirth}
+          onChangeText={setDateOfBirth}
+          autoCapitalize="none"
+        />
+
+        <Text style={styles.label}>เพศ</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="ชาย / หญิง / อื่นๆ"
+          value={gender}
+          onChangeText={setGender}
+          autoCapitalize="words"
+        />
+
+        <Text style={styles.label}>ส่วนสูง (cm)</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="170"
+          keyboardType="numeric"
+          value={height}
+          onChangeText={setHeight}
+        />
+
+        <Text style={styles.label}>น้ำหนัก (kg)</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="65"
+          keyboardType="numeric"
+          value={weight}
+          onChangeText={setWeight}
+        />
+
+        <Text style={styles.label}>กรุ๊ปเลือด</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="A, B, AB, O"
+          value={bloodType}
+          onChangeText={setBloodType}
+          autoCapitalize="characters"
+        />
+
         <Text style={styles.label}>รหัสผ่าน</Text>
         <TextInput
           style={styles.input}
@@ -260,6 +332,9 @@ function Register({ go, onSubmit }) {
         </Pressable>
 
         <Button title="สมัครสมาชิก" onPress={handleSubmit} loading={loading} />
+        <Pressable onPress={() => go('login')}>
+          <Text style={styles.register}>มีบัญชีแล้ว? <Text style={styles.link}>เข้าสู่ระบบ</Text></Text>
+        </Pressable>
       </ScrollView>
     </SafeAreaView>
   );
@@ -912,8 +987,29 @@ export default function App() {
     return { data: response.data };
   };
 
-  const handleRegister = async ({ fullName, email, password }) => {
-    const response = await registerUser({ fullName, email, password });
+  const handleRegister = async ({
+    fullName,
+    email,
+    password,
+    confirmPassword,
+    dateOfBirth,
+    gender,
+    height,
+    weight,
+    bloodType,
+  }) => {
+    const response = await registerUser({
+      fullName,
+      email,
+      password,
+      confirmPassword,
+      dateOfBirth,
+      gender,
+      height,
+      weight,
+      bloodType,
+    });
+
     if (response.error) {
       return response;
     }

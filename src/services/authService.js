@@ -2,6 +2,7 @@ import { supabase } from '../lib/supabase';
 
 export const AUTH_REDIRECT_URL =
   process.env.EXPO_PUBLIC_AUTH_REDIRECT_URL || 'medsafeai://auth/callback';
+export const AUTH_REDIRECT_SCHEME = 'medsafeai://auth/callback';
 
 const normalizeEmail = (value = '') => value.trim().toLowerCase();
 const genericError = 'เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง';

@@ -30,6 +30,7 @@ import { getProfile, updateProfile } from './src/services/profileService';
 import { getUsageHistory, addUsageHistory } from './src/services/historyService';
 import { getSavedItems, saveItem, removeSavedItem, isItemSaved } from './src/services/savedService';
 import { getUserSettings, updateUserSettings } from './src/services/settingsService';
+import { getAdminDashboard } from './src/services/adminService';
 import appPackage from './package.json';
 
 const BLUE = '#2F6FED';
@@ -833,6 +834,7 @@ function Profile({ go, user, profile, onLogout }) {
           ['รายการที่บันทึก', 'saved', 'bookmark-outline'],
           ['ตั้งค่า', 'settings', 'settings-outline'],
           ['เกี่ยวกับ MedSafe AI', 'about', 'information-circle-outline'],
+          ...(profile?.role === 'admin' ? [['Admin Dashboard', 'admin', 'speedometer-outline']] : []),
         ].map(([label, target, icon]) => (
           <Pressable key={target} style={styles.menu} onPress={() => go(target)}>
             <Ionicons name="chevron-forward" size={20} color="#8EA0B8" />
@@ -933,6 +935,51 @@ function BottomNav({ active, go }) {
   );
 }
 
+function AdminDashboard({ go, profile }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const load = async () => {
+    setLoading(true);
+    setError('');
+    const result = await getAdminDashboard();
+    if (result.error) setError(result.error.message || 'โหลดข้อมูล Admin ไม่สำเร็จ');
+    else setData(result.data);
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, []);
+
+  if (profile?.role !== 'admin') {
+    return <SafeAreaView style={styles.screen}><Header title="Admin" go={go} /><View style={styles.content}><Text style={styles.errorBox}>บัญชีนี้ไม่มีสิทธิ์ Admin</Text><Button title="กลับหน้าหลัก" onPress={() => go('home')} /></View></SafeAreaView>;
+  }
+
+  const stats = data || {};
+  const cards = [
+    ['ผู้ใช้งานทั้งหมด', stats.total_users, 'people-outline'],
+    ['ยืนยันอีเมลแล้ว', stats.confirmed_users, 'checkmark-circle-outline'],
+    ['ผู้ใช้ใหม่ 7 วัน', stats.new_users_7d, 'person-add-outline'],
+    ['Active 7 วัน', stats.active_users_7d, 'pulse-outline'],
+    ['กิจกรรมทั้งหมด', stats.total_activities, 'analytics-outline'],
+    ['ข้อมูลยา', stats.total_drug_records, 'medkit-outline'],
+    ['โรงพยาบาล', stats.total_hospitals, 'business-outline'],
+  ];
+
+  return <SafeAreaView style={styles.screen}>
+    <Header title="Admin Dashboard" go={go} />
+    <ScrollView contentContainerStyle={styles.adminContent} refreshControl={<RefreshControl refreshing={loading} onRefresh={load} />}>
+      {loading && !data ? <ActivityIndicator size="large" color={BLUE} /> : null}
+      {error ? <Text style={styles.errorBox}>{error}</Text> : null}
+      {!loading && !error ? <>
+        <Text style={styles.adminNote}>ข้อมูลจริงจาก Supabase</Text>
+        <View style={styles.adminGrid}>{cards.map(([label, value, icon]) => <View key={label} style={styles.adminStat}><Ionicons name={icon} size={22} color={BLUE} /><Text style={styles.adminValue}>{Number(value || 0).toLocaleString('th-TH')}</Text><Text style={styles.muted}>{label}</Text></View>)}</View>
+        <View style={styles.infoBlock}><Text style={styles.cardTitle}>กิจกรรม 7 วันล่าสุด</Text>{(stats.usage_by_day || []).map((item) => <View key={String(item.date)} style={styles.adminDay}><Text style={styles.muted}>{String(item.date)}</Text><Text style={styles.bold}>{Number(item.count || 0).toLocaleString('th-TH')} รายการ</Text></View>)}</View>
+      </> : null}
+    </ScrollView>
+  </SafeAreaView>;
+}
+
 export default function App() {
   const [screen, setScreen] = useState('splash');
   const [authLoading, setAuthLoading] = useState(true);
@@ -982,8 +1029,8 @@ export default function App() {
 
     const currentUser = response.data?.user;
     setUser(currentUser);
-    await loadUserData(currentUser);
-    setScreen('home');
+    const loadedProfile = await loadUserData(currentUser);
+    setScreen(loadedProfile?.role === 'admin' ? 'admin' : 'home');
     return { data: response.data };
   };
 
@@ -1027,8 +1074,8 @@ export default function App() {
     }
 
     setUser(currentUser);
-    await loadUserData(currentUser);
-    setScreen('home');
+    const loadedProfile = await loadUserData(currentUser);
+    setScreen(loadedProfile?.role === 'admin' ? 'admin' : 'home');
     return { data: response.data };
   };
 
@@ -1150,8 +1197,8 @@ export default function App() {
 
       if (data) {
         setUser(data);
-        await loadUserData(data);
-        if (!pendingRecoveryRef.current) setScreen('home');
+        const loadedProfile = await loadUserData(data);
+        if (!pendingRecoveryRef.current) setScreen(loadedProfile?.role === 'admin' ? 'admin' : 'home');
       } else {
         setScreen('login');
       }
@@ -1179,8 +1226,8 @@ export default function App() {
 
       if (session?.user) {
         setUser(session.user);
-        await loadUserData(session.user);
-        setScreen('home');
+        const loadedProfile = await loadUserData(session.user);
+        setScreen(loadedProfile?.role === 'admin' ? 'admin' : 'home');
       } else {
         setUser(null);
         setProfile(null);
@@ -1224,6 +1271,7 @@ export default function App() {
     forgotPassword: <ForgotPassword go={go} onSubmit={handleForgotPassword} />,
     resetPassword: <ResetPassword go={go} onSubmit={handleUpdatePassword} />,
     home: <Home go={go} user={user} profile={profile} onSearch={searchFromHome} />,
+    admin: <AdminDashboard go={go} profile={profile} />,
     chat: <MedicalAI go={go} onHistory={recordHistory} />,
     drugs: <DrugSafety go={go} onSelectDrug={setSelectedDrug} initialQuery={drugQuery} onHistory={recordHistory} />,
     drugDetail: <DrugDetail go={go} selectedDrug={selectedDrug} userId={user?.id} onToggleSave={async () => { const result = await getSavedItems(user?.id); if (!result.error) setSavedItems(result.data); }} />,
@@ -1334,4 +1382,10 @@ const styles = StyleSheet.create({
   menu: { height: 57, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#EDF1F7', flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 15 },
   empty: { color: '#7186A3', textAlign: 'center', paddingVertical: 35 },
   settingRow: { backgroundColor: '#fff', borderWidth: 1, borderColor: BORDER, borderRadius: 13, padding: 15, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  adminContent: { padding: 16, paddingBottom: 40 },
+  adminNote: { color: '#526B8D', fontWeight: '700', marginBottom: 12 },
+  adminGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 12 },
+  adminStat: { width: '48%', minHeight: 108, backgroundColor: '#fff', borderWidth: 1, borderColor: '#E4ECF7', borderRadius: 14, padding: 13 },
+  adminValue: { fontSize: 22, fontWeight: '900', color: DARK, marginTop: 8 },
+  adminDay: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: '#EDF1F7' },
 });

@@ -26,6 +26,7 @@ import {
   updatePassword,
 } from './src/services/authService';
 import { searchDrugs } from './src/services/drugService';
+import { sendMedicalQuestion } from './src/services/medicalAiService';
 import { getProfile, updateProfile } from './src/services/profileService';
 import { getUsageHistory, addUsageHistory } from './src/services/historyService';
 import { getSavedItems, saveItem, removeSavedItem, isItemSaved } from './src/services/savedService';
@@ -543,38 +544,55 @@ function Home({ go, user, profile, onSearch }) {
 function MedicalAI({ go, onHistory }) {
   const [msg, setMsg] = useState('');
   const [messages, setMessages] = useState([]);
-  const [error, setError] = useState('ยังไม่มี Medical AI/RAG endpoint ที่ผ่านการตรวจสอบ จึงไม่แสดงคำตอบที่สร้างขึ้นโดยไม่มีแหล่งอ้างอิง');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const send = () => {
+  const send = async () => {
     if (!msg.trim()) return;
     const question = msg.trim();
-    setMessages((currentMessages) => [...currentMessages, { me: true, text: question }]);
+    const userMessage = { me: true, text: question };
+    setMessages((currentMessages) => [...currentMessages, userMessage]);
     onHistory?.({ action_type: 'medical_ai', title: 'ใช้งาน Medical AI', description: question, metadata: { query: question } });
     setMsg('');
-    setError('ยังส่งคำถามไม่ได้จนกว่าจะตั้งค่า RAG endpoint ที่คืน citations จริง');
+    setError('');
+    setLoading(true);
+
+    const result = await sendMedicalQuestion(question, messages);
+    if (result.error) {
+      setError(result.error.message || 'ไม่สามารถส่งคำถามได้ กรุณาลองใหม่');
+    } else {
+      setMessages((currentMessages) => [...currentMessages, { me: false, text: result.data.answer }]);
+    }
+    setLoading(false);
   };
 
   return (
     <SafeAreaView style={styles.screen}>
       <Header title="AI ด้านสุขภาพ" go={go} />
-      <ScrollView contentContainerStyle={styles.chat}>
+      <ScrollView style={styles.chatScroll} contentContainerStyle={styles.chat} keyboardShouldPersistTaps="handled">
         {error ? <Text style={styles.errorBox}>{error}</Text> : null}
         {messages.map((m, i) => (
           <View key={i} style={[styles.bubble, m.me ? styles.me : styles.ai]}>
             <Text style={m.me ? styles.meText : styles.text}>{m.text}</Text>
           </View>
         ))}
+        {loading ? <ActivityIndicator color={BLUE} style={{ alignSelf: 'flex-start', margin: 10 }} /> : null}
       </ScrollView>
       <View style={styles.composer}>
         <TextInput
           value={msg}
           onChangeText={setMsg}
-          placeholder="พิมพ์คำถามเป็นภาษาไทยหรือภาษาอังกฤษ..."
+          placeholder="พิมพ์ภาษาไทยหรือ English..."
+          accessibilityLabel="ช่องพิมพ์คำถามภาษาไทยหรือภาษาอังกฤษ"
+          keyboardType="default"
+          autoCapitalize="none"
+          autoCorrect={false}
           multiline
+          blurOnSubmit={false}
           textAlignVertical="center"
-          style={{ flex: 1, maxHeight: 90 }}
+          style={styles.composerInput}
         />
-        <Pressable onPress={send} style={styles.send}>
+        <Pressable onPress={send} disabled={loading || !msg.trim()} style={[styles.send, (loading || !msg.trim()) && styles.buttonDisabled]}>
           <Ionicons name="send" color="#fff" size={18} />
         </Pressable>
       </View>
@@ -1350,13 +1368,15 @@ const styles = StyleSheet.create({
   navText: { fontSize: 9, color: '#9AA8BA', marginTop: 2 },
   header: { height: 64, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#E5ECF6', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 18 },
   headerTitle: { fontSize: 17, fontWeight: '800', color: DARK },
-  chat: { padding: 16, paddingBottom: 20 },
+  chatScroll: { flex: 1 },
+  chat: { padding: 16, paddingBottom: 24, flexGrow: 1 },
   bubble: { maxWidth: '82%', padding: 12, borderRadius: 15, marginBottom: 10 },
   ai: { alignSelf: 'flex-start', backgroundColor: '#fff', borderWidth: 1, borderColor: BORDER },
   me: { alignSelf: 'flex-end', backgroundColor: BLUE },
   text: { color: DARK, fontSize: 13, lineHeight: 19 },
   meText: { color: '#fff', fontSize: 13, lineHeight: 19 },
-  composer: { backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#E5ECF6', padding: 10, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  composer: { backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#E5ECF6', paddingHorizontal: 12, paddingVertical: 10, marginBottom: 68, flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
+  composerInput: { flex: 1, minHeight: 42, maxHeight: 90, borderWidth: 1, borderColor: BORDER, borderRadius: 21, backgroundColor: '#F8FBFF', paddingHorizontal: 16, paddingVertical: 10, color: DARK, fontSize: 14 },
   send: { width: 40, height: 40, borderRadius: 20, backgroundColor: BLUE, alignItems: 'center', justifyContent: 'center' },
   content: { padding: 18, paddingBottom: 100 },
   medicine: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#E3EAF5', borderRadius: 14, padding: 13, flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 },

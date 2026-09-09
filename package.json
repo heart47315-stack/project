@@ -23,6 +23,7 @@
     "expo-font": "~13.3.2",
     "expo-location": "~18.1.6",
     "expo-status-bar": "~2.2.3",
+    "openai": "^7.12.1",
     "react": "19.0.0",
     "react-dom": "19.0.0",
     "react-native": "0.79.6",

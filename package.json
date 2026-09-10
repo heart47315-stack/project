@@ -12,6 +12,9 @@
     "test": "jest --runInBand",
     "typecheck": "tsc --noEmit"
   },
+  "jest": {
+    "preset": "jest-expo"
+  },
   "dependencies": {
     "@expo/metro-runtime": "~5.0.5",
     "@expo/vector-icons": "^14.1.0",

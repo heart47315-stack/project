@@ -33,6 +33,7 @@ import { getUsageHistory, addUsageHistory } from './src/services/historyService'
 import { getSavedItems, saveItem, removeSavedItem, isItemSaved } from './src/services/savedService';
 import { getUserSettings, updateUserSettings } from './src/services/settingsService';
 import { getAdminDashboard } from './src/services/adminService';
+import { searchHospitals, getNearbyHospitals } from './src/services/hospitalService';
 import appPackage from './package.json';
 
 const BLUE = '#2F6FED';
@@ -155,6 +156,9 @@ function Login({ go, onSubmit, onForgot }) {
           keyboardType="email-address"
           value={email}
           autoCapitalize="none"
+          autoCorrect={false}
+          textContentType="emailAddress"
+          inputMode="email"
           onChangeText={setEmail}
         />
 
@@ -164,6 +168,10 @@ function Login({ go, onSubmit, onForgot }) {
           placeholder="••••••••"
           secureTextEntry
           value={password}
+          autoCapitalize="none"
+          autoCorrect={false}
+          textContentType="password"
+          inputMode="text"
           onChangeText={setPassword}
         />
 
@@ -254,7 +262,7 @@ function Register({ go, onSubmit }) {
         {error ? <Text style={styles.errorBox}>{error}</Text> : null}
 
         <Text style={styles.label}>ชื่อ-นามสกุล</Text>
-        <TextInput style={styles.input} placeholder="กรอกชื่อ-นามสกุล" value={fullName} onChangeText={setFullName} />
+        <TextInput style={styles.input} placeholder="กรอกชื่อ-นามสกุล" value={fullName} autoCapitalize="words" autoCorrect={false} onChangeText={setFullName} />
 
         <Text style={styles.label}>อีเมล</Text>
         <TextInput
@@ -262,6 +270,8 @@ function Register({ go, onSubmit }) {
           placeholder="example@email.com"
           keyboardType="email-address"
           autoCapitalize="none"
+          autoCorrect={false}
+          textContentType="emailAddress"
           value={email}
           onChangeText={setEmail}
         />
@@ -273,6 +283,8 @@ function Register({ go, onSubmit }) {
           value={dateOfBirth}
           onChangeText={setDateOfBirth}
           autoCapitalize="none"
+          autoCorrect={false}
+          inputMode="numeric"
         />
 
         <Text style={styles.label}>เพศ</Text>
@@ -282,6 +294,8 @@ function Register({ go, onSubmit }) {
           value={gender}
           onChangeText={setGender}
           autoCapitalize="words"
+          autoCorrect={false}
+          inputMode="text"
         />
 
         <Text style={styles.label}>ส่วนสูง (cm)</Text>
@@ -290,6 +304,7 @@ function Register({ go, onSubmit }) {
           placeholder="170"
           keyboardType="numeric"
           value={height}
+          inputMode="numeric"
           onChangeText={setHeight}
         />
 
@@ -299,6 +314,7 @@ function Register({ go, onSubmit }) {
           placeholder="65"
           keyboardType="numeric"
           value={weight}
+          inputMode="numeric"
           onChangeText={setWeight}
         />
 
@@ -309,6 +325,8 @@ function Register({ go, onSubmit }) {
           value={bloodType}
           onChangeText={setBloodType}
           autoCapitalize="characters"
+          autoCorrect={false}
+          inputMode="text"
         />
 
         <Text style={styles.label}>รหัสผ่าน</Text>
@@ -317,6 +335,9 @@ function Register({ go, onSubmit }) {
           placeholder="••••••••"
           secureTextEntry
           value={password}
+          autoCapitalize="none"
+          autoCorrect={false}
+          textContentType="newPassword"
           onChangeText={setPassword}
         />
 
@@ -326,6 +347,9 @@ function Register({ go, onSubmit }) {
           placeholder="••••••••"
           secureTextEntry
           value={confirmPassword}
+          autoCapitalize="none"
+          autoCorrect={false}
+          textContentType="newPassword"
           onChangeText={setConfirmPassword}
         />
 
@@ -397,6 +421,9 @@ function ForgotPassword({ go, onSubmit }) {
           placeholder="example@email.com"
           keyboardType="email-address"
           autoCapitalize="none"
+          autoCorrect={false}
+          textContentType="emailAddress"
+          inputMode="email"
           value={email}
           onChangeText={setEmail}
         />
@@ -466,10 +493,10 @@ function ResetPassword({ go, onSubmit }) {
         {error ? <Text style={styles.errorBox}>{error}</Text> : null}
 
         <Text style={styles.label}>รหัสผ่านใหม่</Text>
-        <TextInput style={styles.input} placeholder="อย่างน้อย 8 ตัวอักษร" secureTextEntry value={password} onChangeText={setPassword} />
+        <TextInput style={styles.input} placeholder="อย่างน้อย 8 ตัวอักษร" secureTextEntry value={password} autoCapitalize="none" autoCorrect={false} textContentType="newPassword" inputMode="text" onChangeText={setPassword} />
 
         <Text style={styles.label}>ยืนยันรหัสผ่านใหม่</Text>
-        <TextInput style={styles.input} placeholder="กรอกรหัสผ่านอีกครั้ง" secureTextEntry value={confirmPassword} onChangeText={setConfirmPassword} />
+        <TextInput style={styles.input} placeholder="กรอกรหัสผ่านอีกครั้ง" secureTextEntry value={confirmPassword} autoCapitalize="none" autoCorrect={false} textContentType="newPassword" inputMode="text" onChangeText={setConfirmPassword} />
 
         <Button title="บันทึกรหัสผ่านใหม่" onPress={handleSubmit} loading={loading} />
       </ScrollView>
@@ -504,6 +531,9 @@ function Home({ go, user, profile, onSearch }) {
             onChangeText={setQuery}
             onSubmitEditing={() => onSearch(query)}
             placeholder="ค้นหาข้อมูลยา อาการ..."
+            autoCapitalize="none"
+            autoCorrect={false}
+            inputMode="text"
             returnKeyType="search"
             style={{ flex: 1 }}
           />
@@ -586,11 +616,12 @@ function MedicalAI({ go, onHistory }) {
           placeholder="พิมพ์ภาษาไทยหรือ English..."
           accessibilityLabel="ช่องพิมพ์คำถามภาษาไทยหรือภาษาอังกฤษ"
           keyboardType="default"
-          autoCapitalize="none"
-          autoCorrect={false}
+          autoCapitalize="sentences"
+          autoCorrect={true}
+          inputMode="text"
           multiline
           blurOnSubmit={false}
-          textAlignVertical="center"
+          textAlignVertical="top"
           style={styles.composerInput}
         />
         <Pressable onPress={send} disabled={loading || !msg.trim()} style={[styles.send, (loading || !msg.trim()) && styles.buttonDisabled]}>
@@ -667,6 +698,7 @@ function DrugSafety({ go, onSelectDrug, initialQuery = '', onHistory }) {
             placeholder="พิมพ์ชื่อยา เช่น พาราเซตามอล หรือ paracetamol"
             autoCapitalize="none"
             autoCorrect={false}
+            inputMode="text"
             returnKeyType="search"
             style={{ flex: 1 }}
           />
@@ -790,51 +822,218 @@ function DrugDetail({ go, selectedDrug, userId, onToggleSave }) {
 
 function SafeRoute({ go, onHistory }) {
   const [loading, setLoading] = useState(false);
+  const [searchLoading, setSearchLoading] = useState(false);
   const [location, setLocation] = useState(null);
+  const [locationAccuracy, setLocationAccuracy] = useState(null);
+  const [destination, setDestination] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [selectedDestination, setSelectedDestination] = useState(null);
   const [routePoints, setRoutePoints] = useState([
     { latitude: 13.7563, longitude: 100.5018 },
     { latitude: 13.7611, longitude: 100.5081 },
     { latitude: 13.7657, longitude: 100.5162 },
   ]);
   const [error, setError] = useState('');
+  const locationWatcherRef = useRef(null);
 
-  const makeRoutePoints = (origin) => {
-    const lat = origin.latitude;
-    const lng = origin.longitude;
+  const stopTracking = () => {
+    if (locationWatcherRef.current) {
+      locationWatcherRef.current.remove();
+      locationWatcherRef.current = null;
+    }
+  };
+
+  useEffect(() => () => stopTracking(), []);
+
+  const makeRoutePoints = (origin, destinationPoint = null) => {
+    const lat = Number(origin.latitude);
+    const lng = Number(origin.longitude);
+    const fallbackDest = destinationPoint || { latitude: lat + 0.0048, longitude: lng + 0.0089 };
     return [
       { latitude: lat, longitude: lng },
       { latitude: lat + 0.0022, longitude: lng + 0.0048 },
       { latitude: lat + 0.0048, longitude: lng + 0.0067 },
-      { latitude: lat + 0.0064, longitude: lng + 0.0089 },
+      { latitude: fallbackDest.latitude, longitude: fallbackDest.longitude },
     ];
+  };
+
+  const localHospitalFallback = (query) => {
+    const q = String(query || '').trim().toLowerCase();
+    const list = [
+      { name: 'โรงพยาบาลศูนย์กลาง', type: 'โรงพยาบาล', address: '123 ถนนตัวอย่าง แขวงพญาไท', province: 'กรุงเทพมหานคร', district: 'พญาไท', latitude: 13.7500, longitude: 100.5650, phone: '02-XXX-XXXX', source: 'SAMPLE' },
+      { name: 'คลินิกตัวอย่าง', type: 'คลินิก', address: '456 ซอยตัวอย่าง เขตราชเทวี', province: 'กรุงเทพมหานคร', district: 'ราชเทวี', latitude: 13.7468, longitude: 100.5678, phone: '02-YYY-YYYY', source: 'SAMPLE' },
+    ];
+
+    if (!q) return [];
+    return list.filter((item) => item.name.toLowerCase().includes(q) || item.address.toLowerCase().includes(q) || item.district.toLowerCase().includes(q));
   };
 
   const assessCurrentLocation = async () => {
     setLoading(true);
     setError('');
     try {
-      const permission = await Location.requestForegroundPermissionsAsync();
-      if (permission.status !== 'granted') {
-        setError('กรุณาอนุญาตตำแหน่งเพื่อประเมินความเสี่ยงบริเวณปัจจุบัน');
+      const providerStatus = await Location.getProviderStatusAsync();
+      if (!providerStatus.locationServicesEnabled) {
+        setError('กรุณาเปิด GPS/Location Services ของ Android ก่อนประเมินตำแหน่ง');
         return;
       }
 
-      const current = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      const coords = current.coords;
+      const permission = await Location.requestForegroundPermissionsAsync();
+      if (permission.status !== 'granted') {
+        setError('กรุณาอนุญาตสิทธิ์ Location เพื่อประเมินตำแหน่งปัจจุบัน');
+        return;
+      }
+
+      let coords = null;
+      try {
+        const current = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.High,
+          mayShowUserSettingsDialog: true,
+        });
+        coords = current.coords;
+      } catch {
+        const lastKnown = await Location.getLastKnownPositionAsync();
+        if (lastKnown?.coords) {
+          coords = lastKnown.coords;
+          setError('ใช้ตำแหน่งล่าสุดที่อุปกรณ์เคยเก็บไว้เนื่องจาก GPS ใช้เวลานาน');
+        } else {
+          throw new Error('gps unavailable');
+        }
+      }
+
+      if (!coords || !Number.isFinite(coords.latitude) || !Number.isFinite(coords.longitude)) {
+        setError('ไม่พบพิกัด GPS ที่ถูกต้อง');
+        return;
+      }
+
       const origin = { latitude: coords.latitude, longitude: coords.longitude };
+      const safeAccuracy = Number.isFinite(coords.accuracy) ? coords.accuracy : null;
 
       setLocation(coords);
-      setRoutePoints(makeRoutePoints(origin));
+      setLocationAccuracy(safeAccuracy);
+      setRoutePoints(makeRoutePoints(origin, selectedDestination || null));
+
+      if (selectedDestination) {
+        setRoutePoints(makeRoutePoints(origin, { latitude: selectedDestination.latitude, longitude: selectedDestination.longitude }));
+      }
+
+      stopTracking();
+      locationWatcherRef.current = await Location.watchPositionAsync(
+        {
+          accuracy: Location.Accuracy.Balanced,
+          timeInterval: 5000,
+          distanceInterval: 5,
+        },
+        (watchPosition) => {
+          const nextCoords = watchPosition.coords;
+          if (!nextCoords) return;
+
+          const nextLocation = {
+            latitude: nextCoords.latitude,
+            longitude: nextCoords.longitude,
+            accuracy: nextCoords.accuracy,
+            altitude: nextCoords.altitude,
+            altitudeAccuracy: nextCoords.altitudeAccuracy,
+            heading: nextCoords.heading,
+            speed: nextCoords.speed,
+          };
+          setLocation(nextLocation);
+          setLocationAccuracy(Number.isFinite(nextCoords.accuracy) ? nextCoords.accuracy : null);
+
+          if (selectedDestination) {
+            setRoutePoints(makeRoutePoints({ latitude: nextCoords.latitude, longitude: nextCoords.longitude }, selectedDestination));
+          } else {
+            setRoutePoints(makeRoutePoints({ latitude: nextCoords.latitude, longitude: nextCoords.longitude }));
+          }
+        }
+      );
+
       onHistory?.({
         action_type: 'safe_route',
         title: 'ใช้งาน SafeRoute',
         description: 'ประเมินตำแหน่งปัจจุบัน',
-        metadata: { accuracy: coords.accuracy || 'balanced' },
+        metadata: { accuracy: safeAccuracy || 'balanced' },
       });
     } catch {
       setError('ไม่สามารถอ่านตำแหน่งปัจจุบันได้ กรุณาลองใหม่');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const searchDestination = async () => {
+    const query = destination.trim();
+    setError('');
+    setSearchResults([]);
+
+    if (!query) {
+      setError('กรุณากรอกชื่อหรือที่อยู่ปลายทางก่อนค้นหา');
+      return;
+    }
+
+    setSearchLoading(true);
+    try {
+      const result = await searchHospitals(query);
+      if (!result.error && result.data?.length) {
+        const first = result.data[0];
+        const safeDestination = {
+          name: first.name || first.hospital_name || first.title || query,
+          address: first.address || first.location || '',
+          latitude: Number(first.latitude || first.lat || 13.7500),
+          longitude: Number(first.longitude || first.lng || 100.5650),
+          source: first.source || 'supabase',
+        };
+
+        setSearchResults(result.data.slice(0, 5));
+        setSelectedDestination(safeDestination);
+
+        if (location) {
+          setRoutePoints(makeRoutePoints({ latitude: location.latitude, longitude: location.longitude }, safeDestination));
+        } else {
+          setRoutePoints(makeRoutePoints({ latitude: 13.7563, longitude: 100.5018 }, safeDestination));
+        }
+
+        return;
+      }
+
+      const fallback = localHospitalFallback(query);
+      if (fallback.length) {
+        const firstFallback = fallback[0];
+        const chosen = {
+          name: firstFallback.name,
+          address: firstFallback.address,
+          latitude: Number(firstFallback.latitude),
+          longitude: Number(firstFallback.longitude),
+          source: 'local-fallback',
+        };
+        setSelectedDestination(chosen);
+        setSearchResults(fallback);
+
+        if (location) {
+          setRoutePoints(makeRoutePoints({ latitude: location.latitude, longitude: location.longitude }, chosen));
+        } else {
+          setRoutePoints(makeRoutePoints({ latitude: 13.7563, longitude: 100.5018 }, chosen));
+        }
+      } else {
+        setError('ไม่พบสถานที่ปลายทางที่ตรงกับคำค้นหา');
+      }
+    } catch {
+      const fallback = localHospitalFallback(query);
+      if (fallback.length) {
+        const firstFallback = fallback[0];
+        setSelectedDestination({
+          name: firstFallback.name,
+          address: firstFallback.address,
+          latitude: Number(firstFallback.latitude),
+          longitude: Number(firstFallback.longitude),
+          source: 'local-fallback',
+        });
+        setSearchResults(fallback);
+      } else {
+        setError('ไม่สามารถค้นหาสถานที่ปลายทางได้ กรุณาลองใหม่');
+      }
+    } finally {
+      setSearchLoading(false);
     }
   };
 
@@ -859,7 +1058,7 @@ function SafeRoute({ go, onHistory }) {
       <View style={styles.locationPanel}>
         <Ionicons name="navigate-circle-outline" size={76} color={BLUE} />
         <Text style={styles.bold}>ประเมินตำแหน่งปัจจุบัน</Text>
-        <Text style={[styles.muted, { textAlign: 'center', marginTop: 6 }]}>แผนที่และเส้นทางจะแสดงจากตำแหน่งปัจจุบันไปยังจุดปลายทางที่ไม่ซ้อนกับข้อมูล Google Routes API แต่ยังใช้ fallback route renderer ภายในแอป</Text>
+        <Text style={[styles.muted, { textAlign: 'center', marginTop: 6 }]}>ค้นหาจุดหมายและประเมินตำแหน่ง GPS จริงแบบ fallback route renderer ภายในแอป</Text>
       </View>
 
       <View style={styles.routeMapWrap}>
@@ -869,13 +1068,61 @@ function SafeRoute({ go, onHistory }) {
               <View style={styles.markerDot} />
             </Marker>
           )}
+          {selectedDestination && (
+            <Marker coordinate={{ latitude: selectedDestination.latitude, longitude: selectedDestination.longitude }}>
+              <View style={styles.markerDestination} />
+            </Marker>
+          )}
           <Polyline coordinates={routePoints} strokeColor={BLUE} strokeWidth={4} lineDashPattern={[1]} />
         </MapView>
       </View>
 
       <View style={styles.routeCard}>
+        <View style={styles.searchRow}>
+          <TextInput
+            style={styles.routeSearchInput}
+            value={destination}
+            onChangeText={setDestination}
+            placeholder="ค้นหาสถานที่ปลายทาง เช่น โรงพยาบาล หรือ พญาไท"
+            autoCapitalize="none"
+            autoCorrect={false}
+            inputMode="text"
+            returnKeyType="search"
+            onSubmitEditing={searchDestination}
+          />
+          <Pressable onPress={searchDestination} style={styles.routeSearchButton} disabled={searchLoading}>
+            <Ionicons name="search" size={18} color="#fff" />
+          </Pressable>
+        </View>
+
+        {searchResults.length > 0 ? (
+          <View style={styles.searchResults}>
+            {searchResults.slice(0, 3).map((item, index) => (
+              <Pressable key={`${item.name || item.hospital_name || item.title || 'result'}-${index}`} style={styles.searchResultItem} onPress={() => {
+                const selected = item.name ? item : {
+                  name: item.hospital_name || item.title || 'สถานที่ที่เลือก',
+                  address: item.address || '',
+                  latitude: Number(item.latitude || item.lat || 13.7500),
+                  longitude: Number(item.longitude || item.lng || 100.5650),
+                  source: item.source || 'local',
+                };
+                setSelectedDestination(selected);
+                if (location) {
+                  setRoutePoints(makeRoutePoints({ latitude: location.latitude, longitude: location.longitude }, selected));
+                }
+              }}>
+                <Text style={styles.cardTitle}>{item.name || item.hospital_name || item.title || 'สถานที่'}</Text>
+                <Text style={styles.muted}>{item.address || item.district || '—'}</Text>
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
+
         {location ? (
-          <Text style={styles.muted}>ตำแหน่งปัจจุบัน: {location.latitude.toFixed(5)}, {location.longitude.toFixed(5)}</Text>
+          <Text style={styles.muted}>ตำแหน่งปัจจุบัน: {location.latitude.toFixed(5)}, {location.longitude.toFixed(5)} | accuracy: {locationAccuracy != null ? `${Math.round(locationAccuracy)} m` : 'ไม่ระบุ'}</Text>
+        ) : null}
+        {selectedDestination ? (
+          <Text style={styles.muted}>ปลายทาง: {selectedDestination.name || selectedDestination.title || 'สถานที่'} ({selectedDestination.latitude.toFixed(4)}, {selectedDestination.longitude.toFixed(4)})</Text>
         ) : null}
         {error ? <Text style={styles.errorBox}>{error}</Text> : null}
         <Button title="ประเมินตำแหน่งปัจจุบัน" onPress={assessCurrentLocation} loading={loading} />
@@ -940,7 +1187,7 @@ function PersonalInfo({ go, user, profile, onSaved }) {
   const fields = [['full_name', 'ชื่อ-นามสกุล'], ['email', 'อีเมล'], ['date_of_birth', 'วันเกิด (YYYY-MM-DD)'], ['gender', 'เพศ'], ['height', 'ส่วนสูง'], ['weight', 'น้ำหนัก'], ['blood_type', 'กรุ๊ปเลือด']];
   return <SafeAreaView style={styles.screen}><Header title="ข้อมูลส่วนตัว" go={go} /><ScrollView contentContainerStyle={styles.content}>
     {error ? <Text style={styles.errorBox}>{error}</Text> : null}
-    {fields.map(([key, label]) => <View key={key}><Text style={styles.label}>{label}</Text><TextInput style={styles.input} value={values[key] == null ? '' : String(values[key])} onChangeText={(text) => setValue(key, text)} keyboardType={['height', 'weight'].includes(key) ? 'numeric' : 'default'} /></View>)}
+    {fields.map(([key, label]) => <View key={key}><Text style={styles.label}>{label}</Text><TextInput style={styles.input} value={values[key] == null ? '' : String(values[key])} onChangeText={(text) => setValue(key, text)} keyboardType={['height', 'weight'].includes(key) ? 'numeric' : 'default'} autoCapitalize={['full_name', 'gender', 'blood_type'].includes(key) ? 'words' : 'none'} autoCorrect={false} inputMode={['height', 'weight'].includes(key) ? 'numeric' : 'text'} /></View>)}
     <Button title="บันทึกข้อมูล" onPress={save} loading={loading} />
   </ScrollView></SafeAreaView>;
 }
@@ -1448,6 +1695,12 @@ const styles = StyleSheet.create({
   routeMapWrap: { marginHorizontal: 16, marginTop: 12, borderRadius: 16, overflow: 'hidden', backgroundColor: '#eef4ff', borderWidth: 1, borderColor: BORDER },
   map: { width: '100%', height: 230 },
   markerDot: { width: 14, height: 14, borderRadius: 7, backgroundColor: RED, borderWidth: 2, borderColor: '#fff' },
+  markerDestination: { width: 16, height: 16, borderRadius: 8, backgroundColor: GREEN, borderWidth: 2, borderColor: '#fff' },
+  searchRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
+  routeSearchInput: { flex: 1, height: 45, borderWidth: 1, borderColor: BORDER, borderRadius: 10, backgroundColor: '#fff', paddingHorizontal: 14, color: DARK },
+  routeSearchButton: { width: 45, height: 45, borderRadius: 10, backgroundColor: BLUE, alignItems: 'center', justifyContent: 'center' },
+  searchResults: { backgroundColor: '#F8FBFF', borderWidth: 1, borderColor: BORDER, borderRadius: 10, padding: 8, marginBottom: 12 },
+  searchResultItem: { paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: BORDER },
   score: { flexDirection: 'row', alignItems: 'baseline' },
   scoreNum: { fontSize: 34, fontWeight: '900', color: GREEN },
   score100: { fontSize: 15, color: '#7D90AA' },

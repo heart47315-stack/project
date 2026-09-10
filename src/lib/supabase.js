@@ -66,16 +66,30 @@ const queryBuilder = {
   },
 };
 
-const noOpSupabase = {
-  auth: {
-    signUp: async () => ({ data: null, error: authError }),
-    signInWithPassword: async () => ({ data: null, error: authError }),
-    resetPasswordForEmail: async () => ({ error: authError }),
-    updateUser: async () => ({ data: null, error: authError }),
-    signOut: async () => ({ error: null }),
-    getSession: async () => ({ data: { session: null }, error: null }),
-    getUser: async () => ({ data: { user: null }, error: null }),
+const noOpSubscription = {
+  unsubscribe() {
+    return true;
   },
+};
+
+const noOpAuth = {
+  signUp: async () => ({ data: null, error: authError }),
+  signInWithPassword: async () => ({ data: null, error: authError }),
+  resetPasswordForEmail: async () => ({ error: authError }),
+  updateUser: async () => ({ data: null, error: authError }),
+  signOut: async () => ({ error: null }),
+  getSession: async () => ({ data: { session: null }, error: null }),
+  getUser: async () => ({ data: { user: null }, error: null }),
+  exchangeCodeForSession: async () => ({ data: null, error: authError }),
+  setSession: async () => ({ data: { session: null }, error: authError }),
+  onAuthStateChange: () => ({
+    data: { subscription: noOpSubscription },
+    error: null,
+  }),
+};
+
+const noOpSupabase = {
+  auth: noOpAuth,
   from() {
     return queryBuilder;
   },

@@ -9,10 +9,17 @@
       "distribution": "internal"
     },
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "channel": "preview",
+      "environment": "preview",
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://ymhlnsfgutmfczsezpnk.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_kzS0XLT9bhyHuttghJaNMg__6uXtYju"
+      }
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "channel": "production"
     }
   },
   "submit": {

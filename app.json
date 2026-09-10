@@ -3,64 +3,18 @@
     "name": "MEDSAFE AI",
     "slug": "medsafe-ai",
     "version": "1.0.0",
-    "orientation": "portrait",
-    "userInterfaceStyle": "light",
-
-    "splash": {
-      "resizeMode": "contain",
-      "backgroundColor": "#F8FBFF"
-    },
-
+    "runtimeVersion": "1.0.0",
     "web": {
       "output": "single",
       "bundler": "metro"
     },
-
-    "android": {
-      "package": "com.medsafeai.app",
-      "permissions": [
-        "ACCESS_COARSE_LOCATION",
-        "ACCESS_FINE_LOCATION"
-      ],
-      "intentFilters": [
-        {
-          "action": "VIEW",
-          "category": [
-            "BROWSABLE",
-            "DEFAULT"
-          ],
-          "data": [
-            {
-              "scheme": "medsafeai",
-              "host": "auth",
-              "pathPrefix": "/callback"
-            }
-          ]
-        }
-      ]
-    },
-
-    "ios": {
-      "bundleIdentifier": "com.medsafeai.app"
-    },
-
-    "plugins": [
-      "expo-asset",
-      "expo-font",
-      [
-        "expo-location",
-        {
-          "locationWhenInUsePermission": "อนุญาตให้ MEDSAFE AI ใช้ตำแหน่งเพื่อประเมินความเสี่ยงของเส้นทาง"
-        }
-      ]
-    ],
-
     "extra": {
       "eas": {
         "projectId": "faf23790-fddd-4b0b-901e-a55720bceef8"
       }
     },
-
-    "scheme": "medsafeai"
+    "updates": {
+      "url": "https://u.expo.dev/faf23790-fddd-4b0b-901e-a55720bceef8"
+    }
   }
 }

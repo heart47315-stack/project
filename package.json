@@ -5,8 +5,8 @@
   "main": "node_modules/expo/AppEntry.js",
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
     "web": "expo start --web",
     "lint": "eslint .",
     "test": "jest --runInBand",
@@ -26,6 +26,7 @@
     "expo-font": "~13.3.2",
     "expo-location": "~18.1.6",
     "expo-status-bar": "~2.2.3",
+    "expo-updates": "~0.28.18",
     "openai": "^7.12.1",
     "react": "19.0.0",
     "react-dom": "19.0.0",

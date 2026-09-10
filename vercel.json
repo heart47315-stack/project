@@ -1,4 +1,4 @@
 {
-  "buildCommand": "npx expo export --platform web",
+  "buildCommand": "node node_modules/expo/bin/cli.js export --platform web --output-dir dist",
   "outputDirectory": "dist"
 }

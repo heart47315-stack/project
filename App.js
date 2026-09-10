@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
-import MapView, { Marker, Polyline } from 'react-native-maps';
+import { MapView, Marker, Polyline } from './src/lib/map-web-safe';
 import { supabase } from './src/lib/supabase';
 import {
   registerUser,

@@ -34,6 +34,7 @@ import { getSavedItems, saveItem, removeSavedItem, isItemSaved } from './src/ser
 import { getUserSettings, updateUserSettings } from './src/services/settingsService';
 import { getAdminDashboard } from './src/services/adminService';
 import { searchHospitals, getNearbyHospitals } from './src/services/hospitalService';
+import { evaluateRouteRisk } from './src/services/safeRouteService';
 import appPackage from './package.json';
 
 const BLUE = '#2F6FED';
@@ -833,6 +834,7 @@ function SafeRoute({ go, onHistory }) {
     { latitude: 13.7611, longitude: 100.5081 },
     { latitude: 13.7657, longitude: 100.5162 },
   ]);
+  const [riskResult, setRiskResult] = useState(null);
   const [error, setError] = useState('');
   const locationWatcherRef = useRef(null);
 
@@ -911,11 +913,20 @@ function SafeRoute({ go, onHistory }) {
 
       setLocation(coords);
       setLocationAccuracy(safeAccuracy);
-      setRoutePoints(makeRoutePoints(origin, selectedDestination || null));
+      const startPoints = makeRoutePoints(origin, selectedDestination || null);
+      setRoutePoints(startPoints);
 
       if (selectedDestination) {
-        setRoutePoints(makeRoutePoints(origin, { latitude: selectedDestination.latitude, longitude: selectedDestination.longitude }));
+        const routeFromCurrent = makeRoutePoints(origin, { latitude: selectedDestination.latitude, longitude: selectedDestination.longitude });
+        setRoutePoints(routeFromCurrent);
       }
+
+      const risk = evaluateRouteRisk({
+        origin,
+        destination: selectedDestination || null,
+        routePoints: selectedDestination ? makeRoutePoints(origin, selectedDestination) : startPoints,
+      });
+      setRiskResult(risk);
 
       stopTracking();
       locationWatcherRef.current = await Location.watchPositionAsync(
@@ -987,11 +998,13 @@ function SafeRoute({ go, onHistory }) {
         setSearchResults(result.data.slice(0, 5));
         setSelectedDestination(safeDestination);
 
-        if (location) {
-          setRoutePoints(makeRoutePoints({ latitude: location.latitude, longitude: location.longitude }, safeDestination));
-        } else {
-          setRoutePoints(makeRoutePoints({ latitude: 13.7563, longitude: 100.5018 }, safeDestination));
-        }
+        const baseOrigin = location
+          ? { latitude: location.latitude, longitude: location.longitude }
+          : { latitude: 13.7563, longitude: 100.5018 };
+
+        const routeFromSearch = makeRoutePoints(baseOrigin, safeDestination);
+        setRoutePoints(routeFromSearch);
+        setRiskResult(evaluateRouteRisk({ origin: baseOrigin, destination: safeDestination, routePoints: routeFromSearch }));
 
         return;
       }
@@ -1009,11 +1022,13 @@ function SafeRoute({ go, onHistory }) {
         setSelectedDestination(chosen);
         setSearchResults(fallback);
 
-        if (location) {
-          setRoutePoints(makeRoutePoints({ latitude: location.latitude, longitude: location.longitude }, chosen));
-        } else {
-          setRoutePoints(makeRoutePoints({ latitude: 13.7563, longitude: 100.5018 }, chosen));
-        }
+        const baseOrigin = location
+          ? { latitude: location.latitude, longitude: location.longitude }
+          : { latitude: 13.7563, longitude: 100.5018 };
+
+        const routeFromFallback = makeRoutePoints(baseOrigin, chosen);
+        setRoutePoints(routeFromFallback);
+        setRiskResult(evaluateRouteRisk({ origin: baseOrigin, destination: chosen, routePoints: routeFromFallback }));
       } else {
         setError('ไม่พบสถานที่ปลายทางที่ตรงกับคำค้นหา');
       }
@@ -1021,14 +1036,23 @@ function SafeRoute({ go, onHistory }) {
       const fallback = localHospitalFallback(query);
       if (fallback.length) {
         const firstFallback = fallback[0];
-        setSelectedDestination({
+        const fallbackDestination = {
           name: firstFallback.name,
           address: firstFallback.address,
           latitude: Number(firstFallback.latitude),
           longitude: Number(firstFallback.longitude),
           source: 'local-fallback',
-        });
+        };
+        setSelectedDestination(fallbackDestination);
         setSearchResults(fallback);
+
+        const baseOrigin = location
+          ? { latitude: location.latitude, longitude: location.longitude }
+          : { latitude: 13.7563, longitude: 100.5018 };
+
+        const fallbackRoute = makeRoutePoints(baseOrigin, fallbackDestination);
+        setRoutePoints(fallbackRoute);
+        setRiskResult(evaluateRouteRisk({ origin: baseOrigin, destination: fallbackDestination, routePoints: fallbackRoute }));
       } else {
         setError('ไม่สามารถค้นหาสถานที่ปลายทางได้ กรุณาลองใหม่');
       }
@@ -1124,6 +1148,18 @@ function SafeRoute({ go, onHistory }) {
         {selectedDestination ? (
           <Text style={styles.muted}>ปลายทาง: {selectedDestination.name || selectedDestination.title || 'สถานที่'} ({selectedDestination.latitude.toFixed(4)}, {selectedDestination.longitude.toFixed(4)})</Text>
         ) : null}
+
+        {riskResult ? (
+          <View style={styles.riskReport}>
+            <View style={styles.scoreRow}>
+              <Text style={styles.cardTitle}>Risk Score</Text>
+              <View style={styles.score}><Text style={styles.scoreNum}>{riskResult.score}</Text><Text style={styles.score100}>/100</Text></View>
+            </View>
+            <Text style={[styles.risk, { color: riskResult.score >= 75 ? RED : riskResult.score >= 45 ? '#C19B14' : GREEN }]}>{riskResult.label}</Text>
+            <Text style={styles.muted}>{riskResult.distanceKm} กม. • {riskResult.summary}</Text>
+          </View>
+        ) : null}
+
         {error ? <Text style={styles.errorBox}>{error}</Text> : null}
         <Button title="ประเมินตำแหน่งปัจจุบัน" onPress={assessCurrentLocation} loading={loading} />
       </View>
@@ -1705,6 +1741,11 @@ const styles = StyleSheet.create({
   scoreNum: { fontSize: 34, fontWeight: '900', color: GREEN },
   score100: { fontSize: 15, color: '#7D90AA' },
   risk: { color: GREEN, fontWeight: '800', marginVertical: 5 },
+  riskReport: { backgroundColor: '#F8FBFF', borderWidth: 1, borderColor: BORDER, borderRadius: 12, padding: 14, marginTop: 12 },
+  scoreRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  score: { flexDirection: 'row', alignItems: 'baseline' },
+  scoreNum: { fontSize: 34, fontWeight: '900', color: GREEN },
+  score100: { fontSize: 14, color: '#7D90AA', marginLeft: 4 },
   profile: { alignItems: 'center', paddingVertical: 15 },
   profileAvatar: { width: 86, height: 86, borderRadius: 43, backgroundColor: '#DCE9FF', alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
   profileAvatarText: { fontSize: 28, color: BLUE, fontWeight: '800' },

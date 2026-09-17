@@ -36,7 +36,7 @@ import { getAdminDashboard } from './src/services/adminService';
 import { searchHospitals, getNearbyHospitals } from './src/services/hospitalService';
 import { evaluateRouteRisk } from './src/services/safeRouteService';
 import { parseAuthUrl } from './src/lib/authRedirect';
-import { resolveBackTarget } from './src/utils/navigation';
+import { resolveBackTarget, pushScreenHistory, popScreenHistory } from './src/utils/navigation';
 import appPackage from './package.json';
 
 const BLUE = '#2F6FED';
@@ -507,7 +507,7 @@ function ResetPassword({ go, onSubmit }) {
   );
 }
 
-function Home({ go, user, profile, onSearch }) {
+function Home({ go, goBack, user, profile, onSearch }) {
   const [query, setQuery] = useState('');
   const cards = [
     ['AI ด้านสุขภาพ', 'ถามคำถามทางการแพทย์', 'meditation', 'chat'],
@@ -575,7 +575,7 @@ function Home({ go, user, profile, onSearch }) {
   );
 }
 
-function MedicalAI({ go, onHistory }) {
+function MedicalAI({ go, goBack, onHistory }) {
   const [msg, setMsg] = useState('');
   const [messages, setMessages] = useState([]);
   const [error, setError] = useState('');
@@ -602,7 +602,7 @@ function MedicalAI({ go, onHistory }) {
 
   return (
     <SafeAreaView style={styles.screen}>
-      <Header title="AI ด้านสุขภาพ" go={go} />
+      <Header title="AI ด้านสุขภาพ" go={go} goBack={goBack} />
       <ScrollView style={styles.chatScroll} contentContainerStyle={styles.chat} keyboardShouldPersistTaps="handled">
         {error ? <Text style={styles.errorBox}>{error}</Text> : null}
         {messages.map((m, i) => (
@@ -636,7 +636,7 @@ function MedicalAI({ go, onHistory }) {
   );
 }
 
-function DrugSafety({ go, onSelectDrug, initialQuery = '', onHistory }) {
+function DrugSafety({ go, goBack, onSelectDrug, initialQuery = '', onHistory }) {
   const [q, setQ] = useState(initialQuery);
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -690,7 +690,7 @@ function DrugSafety({ go, onSelectDrug, initialQuery = '', onHistory }) {
 
   return (
     <SafeAreaView style={styles.screen}>
-      <Header title="ความปลอดภัยด้านยา" go={go} />
+      <Header title="ความปลอดภัยด้านยา" go={go} goBack={goBack} />
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.sectionTitle}>ค้นหายา</Text>
         <View style={styles.search}>
@@ -759,7 +759,7 @@ function DrugSafety({ go, onSelectDrug, initialQuery = '', onHistory }) {
   );
 }
 
-function DrugDetail({ go, selectedDrug, userId, onToggleSave }) {
+function DrugDetail({ go, goBack, selectedDrug, userId, onToggleSave }) {
   const drug = selectedDrug || {};
   const itemId = `${drug.drug_name || ''}:${drug.source || ''}`;
   const [saved, setSaved] = useState(false);
@@ -801,7 +801,7 @@ function DrugDetail({ go, selectedDrug, userId, onToggleSave }) {
 
   return (
     <SafeAreaView style={styles.screen}>
-      <Header title={drug.drug_name || 'ข้อมูลยา'} go={go} />
+      <Header title={drug.drug_name || 'ข้อมูลยา'} go={go} goBack={goBack} />
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.drugHero}>
           <View style={styles.bigPill}><MaterialCommunityIcons name="pill" size={55} color={BLUE} /></View>
@@ -823,7 +823,7 @@ function DrugDetail({ go, selectedDrug, userId, onToggleSave }) {
   );
 }
 
-function SafeRoute({ go, onHistory }) {
+function SafeRoute({ go, goBack, onHistory }) {
   const [loading, setLoading] = useState(false);
   const [searchLoading, setSearchLoading] = useState(false);
   const [location, setLocation] = useState(null);
@@ -1079,7 +1079,7 @@ function SafeRoute({ go, onHistory }) {
 
   return (
     <SafeAreaView style={styles.screen}>
-      <Header title="เส้นทางปลอดภัยด้วย AI" go={go} />
+      <Header title="เส้นทางปลอดภัยด้วย AI" go={go} goBack={goBack} />
 
       <View style={styles.locationPanel}>
         <Ionicons name="navigate-circle-outline" size={76} color={BLUE} />
@@ -1170,13 +1170,13 @@ function SafeRoute({ go, onHistory }) {
   );
 }
 
-function Profile({ go, user, profile, onLogout }) {
+function Profile({ go, goBack, user, profile, onLogout }) {
   const displayName = profile?.full_name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'ผู้ใช้งาน';
   const displayEmail = user?.email || profile?.email || '';
 
   return (
     <SafeAreaView style={styles.screen}>
-      <Header title="โปรไฟล์" go={go} />
+      <Header title="โปรไฟล์" go={go} goBack={goBack} />
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.profile}>
           <View style={styles.profileAvatar}><Text style={styles.profileAvatarText}>{displayName.charAt(0).toUpperCase()}</Text></View>
@@ -1206,7 +1206,7 @@ function Profile({ go, user, profile, onLogout }) {
   );
 }
 
-function PersonalInfo({ go, user, profile, onSaved }) {
+function PersonalInfo({ go, goBack, user, profile, onSaved }) {
   const [values, setValues] = useState({ ...profile, email: profile?.email || user?.email || '' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -1223,49 +1223,50 @@ function PersonalInfo({ go, user, profile, onSaved }) {
     else { onSaved(result.data); Alert.alert('ข้อมูลส่วนตัว', 'บันทึกข้อมูลเรียบร้อยแล้ว'); }
   };
   const fields = [['full_name', 'ชื่อ-นามสกุล'], ['email', 'อีเมล'], ['date_of_birth', 'วันเกิด (YYYY-MM-DD)'], ['gender', 'เพศ'], ['height', 'ส่วนสูง'], ['weight', 'น้ำหนัก'], ['blood_type', 'กรุ๊ปเลือด']];
-  return <SafeAreaView style={styles.screen}><Header title="ข้อมูลส่วนตัว" go={go} /><ScrollView contentContainerStyle={styles.content}>
+  return <SafeAreaView style={styles.screen}><Header title="ข้อมูลส่วนตัว" go={go} goBack={goBack} /><ScrollView contentContainerStyle={styles.content}>
     {error ? <Text style={styles.errorBox}>{error}</Text> : null}
     {fields.map(([key, label]) => <View key={key}><Text style={styles.label}>{label}</Text><TextInput style={styles.input} value={values[key] == null ? '' : String(values[key])} onChangeText={(text) => setValue(key, text)} keyboardType={['height', 'weight'].includes(key) ? 'numeric' : 'default'} autoCapitalize={['full_name', 'gender', 'blood_type'].includes(key) ? 'words' : 'none'} autoCorrect={false} inputMode={['height', 'weight'].includes(key) ? 'numeric' : 'text'} /></View>)}
     <Button title="บันทึกข้อมูล" onPress={save} loading={loading} />
   </ScrollView></SafeAreaView>;
 }
 
-function History({ go, userId }) {
+function History({ go, goBack, userId }) {
   const [items, setItems] = useState([]); const [loading, setLoading] = useState(true); const [refreshing, setRefreshing] = useState(false); const [error, setError] = useState('');
   const load = async (isRefresh = false) => { isRefresh ? setRefreshing(true) : setLoading(true); setError(''); const result = await getUsageHistory(userId); if (result.error) setError(result.error.message || 'ไม่สามารถโหลดประวัติได้'); else setItems(result.data); isRefresh ? setRefreshing(false) : setLoading(false); };
   useEffect(() => { load(); }, [userId]);
-  return <SafeAreaView style={styles.screen}><Header title="ประวัติการใช้งาน" go={go} /><ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} />}>
+  return <SafeAreaView style={styles.screen}><Header title="ประวัติการใช้งาน" go={go} goBack={goBack} /><ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} />}>
     {loading ? <ActivityIndicator color={BLUE} /> : error ? <Text style={styles.errorBox}>{error}</Text> : items.length === 0 ? <Text style={styles.empty}>{'ยังไม่มีประวัติการใช้งาน'}</Text> : items.map((item) => <View style={styles.infoBlock} key={item.id}><Text style={styles.cardTitle}>{item.title}</Text><Text style={styles.muted}>{item.description || 'ไม่มีรายละเอียด'}</Text><Text style={styles.muted}>{item.action_type} · {new Date(item.created_at).toLocaleString('th-TH')}</Text></View>)}
   </ScrollView></SafeAreaView>;
 }
 
-function Saved({ go, userId, onChanged }) {
+function Saved({ go, goBack, userId, onChanged }) {
   const [items, setItems] = useState([]); const [loading, setLoading] = useState(true); const [error, setError] = useState('');
   const load = async () => { setLoading(true); setError(''); const result = await getSavedItems(userId); if (result.error) setError(result.error.message || 'ไม่สามารถโหลดรายการบันทึกได้'); else setItems(result.data); setLoading(false); };
   useEffect(() => { load(); }, [userId]);
   const remove = async (id) => { const result = await removeSavedItem(userId, id); if (result.error) Alert.alert('ลบรายการ', result.error.message || 'ลบรายการไม่สำเร็จ'); else { setItems((current) => current.filter((item) => item.id !== id)); onChanged?.(); } };
-  return <SafeAreaView style={styles.screen}><Header title="รายการที่บันทึก" go={go} /><ScrollView contentContainerStyle={styles.content}>
+  return <SafeAreaView style={styles.screen}><Header title="รายการที่บันทึก" go={go} goBack={goBack} /><ScrollView contentContainerStyle={styles.content}>
     {loading ? <ActivityIndicator color={BLUE} /> : error ? <Text style={styles.errorBox}>{error}</Text> : items.length === 0 ? <Text style={styles.empty}>{'ยังไม่มีรายการที่บันทึก'}</Text> : items.map((item) => <View style={styles.infoBlock} key={item.id}><Text style={styles.cardTitle}>{item.title}</Text><Text style={styles.muted}>{item.description || 'ไม่มีรายละเอียด'}</Text><Text style={styles.muted}>{item.item_type} · {new Date(item.created_at).toLocaleString('th-TH')}</Text><Button title="ลบรายการ" secondary icon="trash-outline" onPress={() => remove(item.id)} /></View>)}
   </ScrollView></SafeAreaView>;
 }
 
-function Settings({ go, userId }) {
+function Settings({ go, goBack, userId }) {
   const [settings, setSettings] = useState(null); const [loading, setLoading] = useState(true); const [error, setError] = useState('');
   useEffect(() => { getUserSettings(userId).then((result) => { if (result.error) setError(result.error.message || 'ไม่สามารถโหลดการตั้งค่าได้'); else setSettings(result.data); setLoading(false); }); }, [userId]);
   const toggle = async (value) => { setSettings((current) => ({ ...current, notifications_enabled: value })); const result = await updateUserSettings(userId, { notifications_enabled: value }); if (result.error) { setError(result.error.message || 'บันทึกการตั้งค่าไม่สำเร็จ'); setSettings((current) => ({ ...current, notifications_enabled: !value })); } };
-  return <SafeAreaView style={styles.screen}><Header title="ตั้งค่า" go={go} /><ScrollView contentContainerStyle={styles.content}>{loading ? <ActivityIndicator color={BLUE} /> : error ? <Text style={styles.errorBox}>{error}</Text> : <><View style={styles.settingRow}><Text style={styles.cardTitle}>การแจ้งเตือน</Text><Switch value={Boolean(settings?.notifications_enabled)} onValueChange={toggle} trackColor={{ true: '#A9C4FA' }} thumbColor={BLUE} /></View><View style={styles.infoBlock}><Text style={styles.cardTitle}>ภาษา</Text><Text style={styles.muted}>{settings?.language || 'th'}</Text></View></>}</ScrollView></SafeAreaView>;
+  return <SafeAreaView style={styles.screen}><Header title="ตั้งค่า" go={go} goBack={goBack} /><ScrollView contentContainerStyle={styles.content}>{loading ? <ActivityIndicator color={BLUE} /> : error ? <Text style={styles.errorBox}>{error}</Text> : <><View style={styles.settingRow}><Text style={styles.cardTitle}>การแจ้งเตือน</Text><Switch value={Boolean(settings?.notifications_enabled)} onValueChange={toggle} trackColor={{ true: '#A9C4FA' }} thumbColor={BLUE} /></View><View style={styles.infoBlock}><Text style={styles.cardTitle}>ภาษา</Text><Text style={styles.muted}>{settings?.language || 'th'}</Text></View></>}</ScrollView></SafeAreaView>;
 }
 
-function About({ go }) {
-  return <SafeAreaView style={styles.screen}><Header title="เกี่ยวกับ MedSafe AI" go={go} /><ScrollView contentContainerStyle={styles.content}><Logo /><Text style={styles.heroTitle}>MEDSAFE AI</Text><Text style={styles.centerText}>ผู้ช่วยสุขภาพอัจฉริยะด้วย AI</Text><View style={styles.infoBlock}><Text style={styles.cardTitle}>เวอร์ชัน</Text><Text style={styles.muted}>{appPackage.version}</Text></View><View style={styles.infoBlock}><Text style={styles.cardTitle}>คำอธิบายแอป</Text><Text style={styles.muted}>ช่วยค้นหาข้อมูลยาและสนับสนุนการดูแลสุขภาพจากข้อมูลที่มีแหล่งอ้างอิง</Text></View><View style={styles.infoBlock}><Text style={styles.cardTitle}>แหล่งข้อมูลยา</Text><Text style={styles.muted}>ฐานข้อมูลยาและแหล่งข้อมูลที่จัดเก็บในโปรเจกต์ MEDSAFE AI</Text></View><Text style={styles.errorBox}>AI ไม่ใช่แพทย์ ข้อมูลนี้ไม่ใช่การวินิจฉัยหรือคำแนะนำทางการแพทย์</Text></ScrollView></SafeAreaView>;
+function About({ go, goBack }) {
+  return <SafeAreaView style={styles.screen}><Header title="เกี่ยวกับ MedSafe AI" go={go} goBack={goBack} /><ScrollView contentContainerStyle={styles.content}><Logo /><Text style={styles.heroTitle}>MEDSAFE AI</Text><Text style={styles.centerText}>ผู้ช่วยสุขภาพอัจฉริยะด้วย AI</Text><View style={styles.infoBlock}><Text style={styles.cardTitle}>เวอร์ชัน</Text><Text style={styles.muted}>{appPackage.version}</Text></View><View style={styles.infoBlock}><Text style={styles.cardTitle}>คำอธิบายแอป</Text><Text style={styles.muted}>ช่วยค้นหาข้อมูลยาและสนับสนุนการดูแลสุขภาพจากข้อมูลที่มีแหล่งอ้างอิง</Text></View><View style={styles.infoBlock}><Text style={styles.cardTitle}>แหล่งข้อมูลยา</Text><Text style={styles.muted}>ฐานข้อมูลยาและแหล่งข้อมูลที่จัดเก็บในโปรเจกต์ MEDSAFE AI</Text></View><Text style={styles.errorBox}>AI ไม่ใช่แพทย์ ข้อมูลนี้ไม่ใช่การวินิจฉัยหรือคำแนะนำทางการแพทย์</Text></ScrollView></SafeAreaView>;
 }
 
-function Header({ title, go, backTarget = 'home' }) {
+function Header({ title, go, goBack, backTarget = 'home' }) {
   const safeBackTarget = resolveBackTarget(backTarget);
+  const handleBack = goBack || (() => go(safeBackTarget));
 
   return (
     <View style={styles.header}>
-      <Pressable onPress={() => go(safeBackTarget)} style={styles.headerSideButton} accessibilityRole="button" accessibilityLabel={`ย้อนกลับไป ${safeBackTarget}`}>
+      <Pressable onPress={handleBack} style={styles.headerSideButton} accessibilityRole="button" accessibilityLabel={`ย้อนกลับไป ${safeBackTarget}`}>
         <Ionicons name="arrow-back" size={24} color={DARK} />
       </Pressable>
       <Text style={styles.headerTitle}>{title}</Text>
@@ -1297,7 +1298,7 @@ function BottomNav({ active, go }) {
   );
 }
 
-function AdminDashboard({ go, profile }) {
+function AdminDashboard({ go, goBack, profile }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -1314,7 +1315,7 @@ function AdminDashboard({ go, profile }) {
   useEffect(() => { load(); }, []);
 
   if (profile?.role !== 'admin') {
-    return <SafeAreaView style={styles.screen}><Header title="Admin" go={go} /><View style={styles.content}><Text style={styles.errorBox}>บัญชีนี้ไม่มีสิทธิ์ Admin</Text><Button title="กลับหน้าหลัก" onPress={() => go('home')} /></View></SafeAreaView>;
+    return <SafeAreaView style={styles.screen}><Header title="Admin" go={go} goBack={goBack} /><View style={styles.content}><Text style={styles.errorBox}>บัญชีนี้ไม่มีสิทธิ์ Admin</Text><Button title="กลับหน้าหลัก" onPress={() => go('home')} /></View></SafeAreaView>;
   }
 
   const stats = data || {};
@@ -1329,7 +1330,7 @@ function AdminDashboard({ go, profile }) {
   ];
 
   return <SafeAreaView style={styles.screen}>
-    <Header title="Admin Dashboard" go={go} />
+    <Header title="Admin Dashboard" go={go} goBack={goBack} />
     <ScrollView contentContainerStyle={styles.adminContent} refreshControl={<RefreshControl refreshing={loading} onRefresh={load} />}>
       {loading && !data ? <ActivityIndicator size="large" color={BLUE} /> : null}
       {error ? <Text style={styles.errorBox}>{error}</Text> : null}
@@ -1344,6 +1345,7 @@ function AdminDashboard({ go, profile }) {
 
 export default function App() {
   const [screen, setScreen] = useState('splash');
+  const [screenHistory, setScreenHistory] = useState(['splash']);
   const [authLoading, setAuthLoading] = useState(true);
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
@@ -1370,10 +1372,24 @@ export default function App() {
     return profileResult.data;
   };
 
-  const go = (s) => setScreen(s);
+  const go = (s) => {
+    const nextScreen = resolveBackTarget(s);
+    setScreen(nextScreen);
+    setScreenHistory((current) => pushScreenHistory(current, nextScreen));
+  };
+
+  const goBack = () => {
+    setScreenHistory((current) => {
+      const nextHistory = popScreenHistory(current);
+      const target = nextHistory[nextHistory.length - 1] || 'home';
+      setScreen(target);
+      return nextHistory;
+    });
+  };
+
   const searchFromHome = (query) => {
     setDrugQuery(query.trim());
-    setScreen('drugs');
+    go('drugs');
   };
 
   const recordHistory = async (payload) => {
@@ -1428,7 +1444,7 @@ export default function App() {
     if (response.needsEmailConfirmation || !response.data?.session) {
       setUser(null);
       setProfile(null);
-      setScreen('login');
+      go('login');
       return {
         data: response.data,
         needsEmailConfirmation: true,
@@ -1472,7 +1488,7 @@ export default function App() {
     setHistory([]);
     setSavedItems([]);
     setSettings(null);
-    setScreen('login');
+    go('login');
   };
 
   useEffect(() => {
@@ -1506,12 +1522,12 @@ export default function App() {
           isRecovery ? 'ลิงก์เปลี่ยนรหัสผ่านหมดอายุ' : 'ยืนยันอีเมลไม่สำเร็จ',
           'กรุณาขอลิงก์ใหม่แล้วลองอีกครั้ง'
         );
-        setScreen('login');
+        go('login');
         return;
       }
 
       if (isRecovery) {
-        setScreen('resetPassword');
+        go('resetPassword');
       }
     };
 
@@ -1526,9 +1542,9 @@ export default function App() {
       if (data) {
         setUser(data);
         const loadedProfile = await loadUserData(data);
-        if (!pendingRecoveryRef.current) setScreen(loadedProfile?.role === 'admin' ? 'admin' : 'home');
+        if (!pendingRecoveryRef.current) go(loadedProfile?.role === 'admin' ? 'admin' : 'home');
       } else {
-        setScreen('login');
+        go('login');
       }
 
       setAuthLoading(false);
@@ -1548,21 +1564,21 @@ export default function App() {
           setUser(session.user);
           await loadUserData(session.user);
         }
-        setScreen('resetPassword');
+        go('resetPassword');
         return;
       }
 
       if (session?.user) {
         setUser(session.user);
         const loadedProfile = await loadUserData(session.user);
-        setScreen(loadedProfile?.role === 'admin' ? 'admin' : 'home');
+        go(loadedProfile?.role === 'admin' ? 'admin' : 'home');
       } else {
         setUser(null);
         setProfile(null);
         setHistory([]);
         setSavedItems([]);
         setSettings(null);
-        setScreen('login');
+        go('login');
       }
 
       setAuthLoading(false);
@@ -1598,18 +1614,18 @@ export default function App() {
     register: <Register go={go} onSubmit={handleRegister} />,
     forgotPassword: <ForgotPassword go={go} onSubmit={handleForgotPassword} />,
     resetPassword: <ResetPassword go={go} onSubmit={handleUpdatePassword} />,
-    home: <Home go={go} user={user} profile={profile} onSearch={searchFromHome} />,
-    admin: <AdminDashboard go={go} profile={profile} />,
-    chat: <MedicalAI go={go} onHistory={recordHistory} />,
-    drugs: <DrugSafety go={go} onSelectDrug={setSelectedDrug} initialQuery={drugQuery} onHistory={recordHistory} />,
-    drugDetail: <DrugDetail go={go} selectedDrug={selectedDrug} userId={user?.id} onToggleSave={async () => { const result = await getSavedItems(user?.id); if (!result.error) setSavedItems(result.data); }} />,
-    route: <SafeRoute go={go} onHistory={recordHistory} />,
-    profile: <Profile go={go} user={user} profile={profile} onLogout={handleLogout} />,
-    personalInfo: <PersonalInfo go={go} user={user} profile={profile} onSaved={setProfile} />,
-    history: <History go={go} userId={user?.id} />,
-    saved: <Saved go={go} userId={user?.id} onChanged={async () => { const result = await getSavedItems(user?.id); if (!result.error) setSavedItems(result.data); }} />,
-    settings: <Settings go={go} userId={user?.id} />,
-    about: <About go={go} />,
+    home: <Home go={go} goBack={goBack} user={user} profile={profile} onSearch={searchFromHome} />,
+    admin: <AdminDashboard go={go} goBack={goBack} profile={profile} />,
+    chat: <MedicalAI go={go} goBack={goBack} onHistory={recordHistory} />,
+    drugs: <DrugSafety go={go} goBack={goBack} onSelectDrug={setSelectedDrug} initialQuery={drugQuery} onHistory={recordHistory} />,
+    drugDetail: <DrugDetail go={go} goBack={goBack} selectedDrug={selectedDrug} userId={user?.id} onToggleSave={async () => { const result = await getSavedItems(user?.id); if (!result.error) setSavedItems(result.data); }} />,
+    route: <SafeRoute go={go} goBack={goBack} onHistory={recordHistory} />,
+    profile: <Profile go={go} goBack={goBack} user={user} profile={profile} onLogout={handleLogout} />,
+    personalInfo: <PersonalInfo go={go} goBack={goBack} user={user} profile={profile} onSaved={setProfile} />,
+    history: <History go={go} goBack={goBack} userId={user?.id} />,
+    saved: <Saved go={go} goBack={goBack} userId={user?.id} onChanged={async () => { const result = await getSavedItems(user?.id); if (!result.error) setSavedItems(result.data); }} />,
+    settings: <Settings go={go} goBack={goBack} userId={user?.id} />,
+    about: <About go={go} goBack={goBack} />,
   };
 
   return (

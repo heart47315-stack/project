@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Platform, View } from 'react-native';
+import { Platform, View, Text } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
 
@@ -223,12 +223,40 @@ if (isWeb) {
   /**
    * Android / iOS
    * ใช้ react-native-maps ตามเดิม
+   * ถ้า dependency ขาด/พัง ให้ fallback แบบปลอดภัยแทน
    */
-  const RNMaps = require('react-native-maps');
+  let RNMaps;
+  try {
+    RNMaps = require('react-native-maps');
+  } catch (error) {
+    console.warn('react-native-maps unavailable, using safe fallback map:', error);
+    RNMaps = null;
+  }
 
-  MapView = RNMaps.default;
-  Marker = RNMaps.Marker;
-  Polyline = RNMaps.Polyline;
+  if (RNMaps) {
+    MapView = RNMaps.default;
+    Marker = RNMaps.Marker;
+    Polyline = RNMaps.Polyline;
+  } else {
+    MapView = function SafeFallbackMapView({ style, children }) {
+      return (
+        <View style={[{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F3F7FF', padding: 16 }, style]}>
+          <Text style={{ color: '#18365F', fontWeight: '600', textAlign: 'center' }}>
+            แผนที่ไม่พร้อมใช้งานในอุปกรณ์นี้
+          </Text>
+          {children}
+        </View>
+      );
+    };
+
+    Marker = function SafeFallbackMarker() {
+      return null;
+    };
+
+    Polyline = function SafeFallbackPolyline() {
+      return null;
+    };
+  }
 }
 
 /**

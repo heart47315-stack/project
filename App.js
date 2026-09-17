@@ -612,6 +612,16 @@ function MedicalAI({ go, goBack, onHistory }) {
       setError(result.error.message || 'ไม่สามารถส่งคำถามได้ กรุณาลองใหม่');
     } else {
       setMessages((currentMessages) => [...currentMessages, { me: false, text: result.data.answer }]);
+      onHistory?.({
+        action_type: 'medical_ai',
+        title: 'ใช้งาน Medical AI',
+        description: question,
+        metadata: {
+          query: question,
+          citations: result.data.citations || [],
+          answer: result.data.answer,
+        },
+      });
     }
     setLoading(false);
   };

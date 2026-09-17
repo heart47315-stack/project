@@ -1,10 +1,16 @@
 import { supabase } from '../lib/supabase';
+import { normalizeCitations } from './medicalKnowledge';
 
 const FUNCTION_NAME = 'ai-chat';
 
 function getAnswer(payload) {
   if (typeof payload === 'string') return payload.trim();
   return String(payload?.answer || payload?.message || payload?.content || payload?.data?.answer || '').trim();
+}
+
+function getCitations(payload) {
+  const raw = payload?.citations || payload?.sources || payload?.references || [];
+  return normalizeCitations(raw);
 }
 
 export async function sendMedicalQuestion(question, history = []) {
@@ -26,15 +32,17 @@ export async function sendMedicalQuestion(question, history = []) {
         message = details?.error?.message || details?.error || details?.message || message;
       } catch {
       }
-      if (/openai api error|invalid api key|unauthorized/i.test(message)) {
-        message = 'เชื่อมต่อ OpenAI ไม่สำเร็จ กรุณาตรวจสอบ OPENAI_API_KEY ใน Supabase Edge Function secrets';
+      if (/openai api error|invalid api key|unauthorized|authentication required|forbidden/i.test(message)) {
+        message = 'คำขอ Medical AI ต้องยืนยันสิทธิ์จาก Supabase ก่อนใช้งาน และหากมีข้อผิดพลาดด้าน key ให้ตรวจสอบ Edge Function secrets';
       }
       return { error: { message } };
     }
 
     const answer = getAnswer(payload);
     if (!answer) return { error: { message: 'เซิร์ฟเวอร์ไม่ส่งข้อความตอบกลับมา' } };
-    return { data: { answer, citations: payload?.citations || payload?.sources || [] } };
+
+    const citations = getCitations(payload);
+    return { data: { answer, citations } };
   } catch {
     return { error: { message: 'เชื่อมต่อ Medical AI ไม่ได้ กรุณาตรวจสอบ endpoint และอินเทอร์เน็ต' } };
   }

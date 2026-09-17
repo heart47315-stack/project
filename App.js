@@ -37,7 +37,14 @@ import { getAdminDashboard } from './src/services/adminService';
 import { searchHospitals, getNearbyHospitals } from './src/services/hospitalService';
 import { evaluateRouteRisk, fetchRouteBetween } from './src/services/safeRouteService';
 import { parseAuthUrl } from './src/lib/authRedirect';
-import { resolveBackTarget, pushScreenHistory, popScreenHistory } from './src/utils/navigation';
+import {
+  resolveBackTarget,
+  pushScreenHistory,
+  popScreenHistory,
+  getRoleScreen,
+  resetAuthHistory,
+  canAccessAdminScreen,
+} from './src/utils/navigation';
 import appPackage from './package.json';
 
 const BLUE = '#2F6FED';
@@ -510,7 +517,7 @@ function ResetPassword({ go, onSubmit }) {
   );
 }
 
-function Home({ go, goBack, user, profile, onSearch }) {
+function Home({ go, goBack, user, profile, onSearch, onReturnToAdmin, isAdminUserMode }) {
   const [query, setQuery] = useState('');
   const cards = [
     ['AI ด้านสุขภาพ', 'ถามคำถามทางการแพทย์', 'meditation', 'chat'],
@@ -529,6 +536,12 @@ function Home({ go, goBack, user, profile, onSearch }) {
           </View>
           <View style={styles.avatar}><Text>{displayName.charAt(0).toUpperCase()}</Text></View>
         </View>
+
+        {profile?.role === 'admin' ? (
+          <Pressable onPress={onReturnToAdmin} style={[styles.adminToggle, isAdminUserMode && styles.adminToggleActive]}>
+            <Text style={styles.adminToggleText}>{isAdminUserMode ? 'กลับ Admin Dashboard' : 'กลับ Admin Dashboard'}</Text>
+          </Pressable>
+        ) : null}
 
         <View style={styles.search}>
           <Ionicons name="search" size={18} color="#8B9AB2" />
@@ -1361,7 +1374,7 @@ function BottomNav({ active, go }) {
   );
 }
 
-function AdminDashboard({ go, goBack, profile }) {
+function AdminDashboard({ go, goBack, profile, onLogout, onUseUserMode }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -1401,6 +1414,8 @@ function AdminDashboard({ go, goBack, profile }) {
         <Text style={styles.adminNote}>ข้อมูลจริงจาก Supabase</Text>
         <View style={styles.adminGrid}>{cards.map(([label, value, icon]) => <View key={label} style={styles.adminStat}><Ionicons name={icon} size={22} color={BLUE} /><Text style={styles.adminValue}>{Number(value || 0).toLocaleString('th-TH')}</Text><Text style={styles.muted}>{label}</Text></View>)}</View>
         <View style={styles.infoBlock}><Text style={styles.cardTitle}>กิจกรรม 7 วันล่าสุด</Text>{(stats.usage_by_day || []).map((item) => <View key={String(item.date)} style={styles.adminDay}><Text style={styles.muted}>{String(item.date)}</Text><Text style={styles.bold}>{Number(item.count || 0).toLocaleString('th-TH')} รายการ</Text></View>)}</View>
+        <Button title="ใช้งานระบบแบบ User" onPress={onUseUserMode} />
+        <Button title="ออกจากระบบ" secondary onPress={onLogout} />
       </> : null}
     </ScrollView>
   </SafeAreaView>;
@@ -1433,12 +1448,50 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState(true);
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
+  const [adminUserMode, setAdminUserMode] = useState(false);
   const [history, setHistory] = useState([]);
   const [savedItems, setSavedItems] = useState([]);
   const [settings, setSettings] = useState(null);
   const [selectedDrug, setSelectedDrug] = useState(null);
   const [drugQuery, setDrugQuery] = useState('');
   const pendingRecoveryRef = useRef(false);
+
+  const resetAuthState = () => {
+    setUser(null);
+    setProfile(null);
+    setHistory([]);
+    setSavedItems([]);
+    setSettings(null);
+    setAdminUserMode(false);
+    setScreen('login');
+    setScreenHistory(resetAuthHistory());
+  };
+
+  const routeAfterAuth = (role) => {
+    const target = getRoleScreen(role);
+    setAdminUserMode(false);
+    setScreen(target);
+    setScreenHistory((current) => {
+      const base = current.includes('login')
+        ? current.slice(0, current.lastIndexOf('login') + 1)
+        : ['login'];
+      return pushScreenHistory(base, target);
+    });
+  };
+
+  const enterAdminUserMode = () => {
+    if (profile?.role !== 'admin') return;
+    setAdminUserMode(true);
+    setScreen('home');
+    setScreenHistory((current) => pushScreenHistory(current, 'home'));
+  };
+
+  const returnToAdminDashboard = () => {
+    if (profile?.role !== 'admin') return;
+    setAdminUserMode(false);
+    setScreen('admin');
+    setScreenHistory((current) => pushScreenHistory(current, 'admin'));
+  };
 
   const loadUserData = async (currentUser) => {
     if (!currentUser?.id) return null;
@@ -1458,6 +1511,19 @@ export default function App() {
 
   const go = (s) => {
     const nextScreen = resolveBackTarget(s);
+
+    if (nextScreen === 'admin' && !canAccessAdminScreen(profile?.role)) {
+      const target = getRoleScreen(profile?.role);
+      setScreen(target);
+      setScreenHistory((current) => {
+        const base = current.includes('login')
+          ? current.slice(0, current.lastIndexOf('login') + 1)
+          : ['login'];
+        return pushScreenHistory(base, target);
+      });
+      return;
+    }
+
     setScreen(nextScreen);
     setScreenHistory((current) => pushScreenHistory(current, nextScreen));
   };
@@ -1492,7 +1558,7 @@ export default function App() {
     const currentUser = response.data?.user;
     setUser(currentUser);
     const loadedProfile = await loadUserData(currentUser);
-    setScreen(loadedProfile?.role === 'admin' ? 'admin' : 'home');
+    routeAfterAuth(loadedProfile?.role);
     return { data: response.data };
   };
 
@@ -1528,7 +1594,8 @@ export default function App() {
     if (response.needsEmailConfirmation || !response.data?.session) {
       setUser(null);
       setProfile(null);
-      go('login');
+      setScreenHistory(resetAuthHistory());
+      setScreen('login');
       return {
         data: response.data,
         needsEmailConfirmation: true,
@@ -1537,7 +1604,7 @@ export default function App() {
 
     setUser(currentUser);
     const loadedProfile = await loadUserData(currentUser);
-    setScreen(loadedProfile?.role === 'admin' ? 'admin' : 'home');
+    routeAfterAuth(loadedProfile?.role);
     return { data: response.data };
   };
 
@@ -1552,11 +1619,7 @@ export default function App() {
     // Password recovery sessions are short-lived and should not leave the
     // user stuck on the reset screen after a successful update.
     await supabase.auth.signOut();
-    setUser(null);
-    setProfile(null);
-    setHistory([]);
-    setSavedItems([]);
-    setSettings(null);
+    resetAuthState();
     return response;
   };
 
@@ -1567,12 +1630,7 @@ export default function App() {
       return;
     }
 
-    setUser(null);
-    setProfile(null);
-    setHistory([]);
-    setSavedItems([]);
-    setSettings(null);
-    go('login');
+    resetAuthState();
   };
 
   useEffect(() => {
@@ -1626,9 +1684,10 @@ export default function App() {
       if (data) {
         setUser(data);
         const loadedProfile = await loadUserData(data);
-        if (!pendingRecoveryRef.current) go(loadedProfile?.role === 'admin' ? 'admin' : 'home');
+        if (!pendingRecoveryRef.current) routeAfterAuth(loadedProfile?.role);
       } else {
-        go('login');
+        setScreen('login');
+        setScreenHistory(resetAuthHistory());
       }
 
       setAuthLoading(false);
@@ -1655,14 +1714,9 @@ export default function App() {
       if (session?.user) {
         setUser(session.user);
         const loadedProfile = await loadUserData(session.user);
-        go(loadedProfile?.role === 'admin' ? 'admin' : 'home');
+        routeAfterAuth(loadedProfile?.role);
       } else {
-        setUser(null);
-        setProfile(null);
-        setHistory([]);
-        setSavedItems([]);
-        setSettings(null);
-        go('login');
+        resetAuthState();
       }
 
       setAuthLoading(false);
@@ -1698,8 +1752,8 @@ export default function App() {
     register: <Register go={go} onSubmit={handleRegister} />,
     forgotPassword: <ForgotPassword go={go} onSubmit={handleForgotPassword} />,
     resetPassword: <ResetPassword go={go} onSubmit={handleUpdatePassword} />,
-    home: <Home go={go} goBack={goBack} user={user} profile={profile} onSearch={searchFromHome} />,
-    admin: <AdminDashboard go={go} goBack={goBack} profile={profile} />,
+    home: <Home go={go} goBack={goBack} user={user} profile={profile} onSearch={searchFromHome} onReturnToAdmin={returnToAdminDashboard} isAdminUserMode={adminUserMode} />,
+    admin: <AdminDashboard go={go} goBack={goBack} profile={profile} onLogout={handleLogout} onUseUserMode={enterAdminUserMode} />,
     chat: <MedicalAI go={go} goBack={goBack} onHistory={recordHistory} />,
     drugs: <DrugSafety go={go} goBack={goBack} onSelectDrug={setSelectedDrug} initialQuery={drugQuery} onHistory={recordHistory} />,
     drugDetail: <DrugDetail go={go} goBack={goBack} selectedDrug={selectedDrug} userId={user?.id} onToggleSave={async () => { const result = await getSavedItems(user?.id); if (!result.error) setSavedItems(result.data); }} />,

@@ -2,6 +2,18 @@ export function resolveBackTarget(target = 'home') {
   return target && String(target).trim() ? String(target).trim() : 'home';
 }
 
+export function getRoleScreen(role) {
+  return role === 'admin' ? 'admin' : 'home';
+}
+
+export function resetAuthHistory() {
+  return ['login'];
+}
+
+export function canAccessAdminScreen(role) {
+  return role === 'admin';
+}
+
 export function pushScreenHistory(history = [], nextScreen) {
   const target = resolveBackTarget(nextScreen);
   if (!history.length) return [target];

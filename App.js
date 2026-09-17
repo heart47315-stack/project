@@ -36,6 +36,7 @@ import { getAdminDashboard } from './src/services/adminService';
 import { searchHospitals, getNearbyHospitals } from './src/services/hospitalService';
 import { evaluateRouteRisk } from './src/services/safeRouteService';
 import { parseAuthUrl } from './src/lib/authRedirect';
+import { resolveBackTarget } from './src/utils/navigation';
 import appPackage from './package.json';
 
 const BLUE = '#2F6FED';
@@ -1259,12 +1260,18 @@ function About({ go }) {
   return <SafeAreaView style={styles.screen}><Header title="เกี่ยวกับ MedSafe AI" go={go} /><ScrollView contentContainerStyle={styles.content}><Logo /><Text style={styles.heroTitle}>MEDSAFE AI</Text><Text style={styles.centerText}>ผู้ช่วยสุขภาพอัจฉริยะด้วย AI</Text><View style={styles.infoBlock}><Text style={styles.cardTitle}>เวอร์ชัน</Text><Text style={styles.muted}>{appPackage.version}</Text></View><View style={styles.infoBlock}><Text style={styles.cardTitle}>คำอธิบายแอป</Text><Text style={styles.muted}>ช่วยค้นหาข้อมูลยาและสนับสนุนการดูแลสุขภาพจากข้อมูลที่มีแหล่งอ้างอิง</Text></View><View style={styles.infoBlock}><Text style={styles.cardTitle}>แหล่งข้อมูลยา</Text><Text style={styles.muted}>ฐานข้อมูลยาและแหล่งข้อมูลที่จัดเก็บในโปรเจกต์ MEDSAFE AI</Text></View><Text style={styles.errorBox}>AI ไม่ใช่แพทย์ ข้อมูลนี้ไม่ใช่การวินิจฉัยหรือคำแนะนำทางการแพทย์</Text></ScrollView></SafeAreaView>;
 }
 
-function Header({ title, go }) {
+function Header({ title, go, backTarget = 'home' }) {
+  const safeBackTarget = resolveBackTarget(backTarget);
+
   return (
     <View style={styles.header}>
-      <Pressable onPress={() => go('home')}><Ionicons name="arrow-back" size={24} color={DARK} /></Pressable>
+      <Pressable onPress={() => go(safeBackTarget)} style={styles.headerSideButton} accessibilityRole="button" accessibilityLabel={`ย้อนกลับไป ${safeBackTarget}`}>
+        <Ionicons name="arrow-back" size={24} color={DARK} />
+      </Pressable>
       <Text style={styles.headerTitle}>{title}</Text>
-      <Ionicons name="notifications-outline" size={23} color={DARK} />
+      <View style={styles.headerSideButton} accessibilityRole="button" accessibilityLabel="การแจ้งเตือน">
+        <Ionicons name="notifications-outline" size={23} color={DARK} />
+      </View>
     </View>
   );
 }
@@ -1669,8 +1676,9 @@ const styles = StyleSheet.create({
   bottom: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 68, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#E4ECF7', flexDirection: 'row', justifyContent: 'space-around', paddingTop: 8 },
   navItem: { alignItems: 'center', width: 65 },
   navText: { fontSize: 9, color: '#9AA8BA', marginTop: 2 },
-  header: { height: 64, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#E5ECF6', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 18 },
-  headerTitle: { fontSize: 17, fontWeight: '800', color: DARK },
+  header: { height: 64, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#E5ECF6', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18 },
+  headerSideButton: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { flex: 1, textAlign: 'center', fontSize: 17, fontWeight: '800', color: DARK, marginHorizontal: 8 },
   chatScroll: { flex: 1 },
   chat: { padding: 16, paddingBottom: 24, flexGrow: 1 },
   bubble: { maxWidth: '82%', padding: 12, borderRadius: 15, marginBottom: 10 },

@@ -1,4 +1,5 @@
 ﻿import React, { useState, useEffect, useRef } from 'react';
+import * as Updates from 'expo-updates';
 import {
   SafeAreaView,
   View,
@@ -1406,6 +1407,27 @@ function AdminDashboard({ go, goBack, profile }) {
 }
 
 export default function App() {
+  useEffect(() => {
+    const checkForUpdates = async () => {
+      try {
+        if (__DEV__) return;
+
+        const update = await Updates.checkForUpdateAsync();
+
+        if (update.isAvailable) {
+          console.log('[EAS Update] New update found');
+
+          await Updates.fetchUpdateAsync();
+          await Updates.reloadAsync();
+        }
+      } catch (error) {
+        console.log('[EAS Update] Check failed:', error);
+      }
+    };
+
+    checkForUpdates();
+  }, []);
+
   const [screen, setScreen] = useState('splash');
   const [screenHistory, setScreenHistory] = useState(['splash']);
   const [authLoading, setAuthLoading] = useState(true);

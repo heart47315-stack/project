@@ -537,9 +537,9 @@ function Home({ go, goBack, user, profile, onSearch, onReturnToAdmin, isAdminUse
           <View style={styles.avatar}><Text>{displayName.charAt(0).toUpperCase()}</Text></View>
         </View>
 
-        {profile?.role === 'admin' ? (
-          <Pressable onPress={onReturnToAdmin} style={[styles.adminToggle, isAdminUserMode && styles.adminToggleActive]}>
-            <Text style={styles.adminToggleText}>{isAdminUserMode ? 'กลับ Admin Dashboard' : 'กลับ Admin Dashboard'}</Text>
+        {profile?.role === 'admin' && isAdminUserMode ? (
+          <Pressable onPress={onReturnToAdmin} style={[styles.adminToggle, styles.adminToggleActive]}>
+            <Text style={styles.adminToggleText}>กลับ Admin Dashboard</Text>
           </Pressable>
         ) : null}
 
@@ -1472,7 +1472,7 @@ export default function App() {
     setAdminUserMode(false);
     setScreen(target);
     setScreenHistory((current) => {
-      const base = current.includes('login')
+      const base = Array.isArray(current) && current.includes('login')
         ? current.slice(0, current.lastIndexOf('login') + 1)
         : ['login'];
       return pushScreenHistory(base, target);
@@ -1483,14 +1483,24 @@ export default function App() {
     if (profile?.role !== 'admin') return;
     setAdminUserMode(true);
     setScreen('home');
-    setScreenHistory((current) => pushScreenHistory(current, 'home'));
+    setScreenHistory((current) => {
+      const base = Array.isArray(current) && current.includes('login')
+        ? current.slice(0, current.lastIndexOf('login') + 1)
+        : ['login'];
+      return pushScreenHistory(base, 'home');
+    });
   };
 
   const returnToAdminDashboard = () => {
     if (profile?.role !== 'admin') return;
     setAdminUserMode(false);
     setScreen('admin');
-    setScreenHistory((current) => pushScreenHistory(current, 'admin'));
+    setScreenHistory((current) => {
+      const base = Array.isArray(current) && current.includes('login')
+        ? current.slice(0, current.lastIndexOf('login') + 1)
+        : ['login'];
+      return pushScreenHistory(base, 'admin');
+    });
   };
 
   const loadUserData = async (currentUser) => {
@@ -1516,12 +1526,16 @@ export default function App() {
       const target = getRoleScreen(profile?.role);
       setScreen(target);
       setScreenHistory((current) => {
-        const base = current.includes('login')
+        const base = Array.isArray(current) && current.includes('login')
           ? current.slice(0, current.lastIndexOf('login') + 1)
           : ['login'];
         return pushScreenHistory(base, target);
       });
       return;
+    }
+
+    if (nextScreen === 'home' && profile?.role === 'admin' && adminUserMode) {
+      setAdminUserMode(true);
     }
 
     setScreen(nextScreen);
@@ -1530,9 +1544,21 @@ export default function App() {
 
   const goBack = () => {
     setScreenHistory((current) => {
+      if (!Array.isArray(current) || current.length === 0) {
+        setScreen('login');
+        return resetAuthHistory();
+      }
+
       const nextHistory = popScreenHistory(current);
-      const target = nextHistory[nextHistory.length - 1] || 'home';
+      const target = nextHistory[nextHistory.length - 1] || 'login';
       setScreen(target);
+
+      if (target === 'login') {
+        setUser(null);
+        setProfile(null);
+        setAdminUserMode(false);
+      }
+
       return nextHistory;
     });
   };
@@ -1631,6 +1657,9 @@ export default function App() {
     }
 
     resetAuthState();
+    if (typeof window !== 'undefined' && typeof window.history !== 'undefined') {
+      window.history.pushState(null, '', window.location.pathname);
+    }
   };
 
   useEffect(() => {
@@ -1711,12 +1740,22 @@ export default function App() {
         return;
       }
 
-      if (session?.user) {
-        setUser(session.user);
-        const loadedProfile = await loadUserData(session.user);
-        routeAfterAuth(loadedProfile?.role);
-      } else {
+      if (!session?.user) {
         resetAuthState();
+        setAuthLoading(false);
+        return;
+      }
+
+      const currentUser = session.user;
+      setUser(currentUser);
+      const loadedProfile = await loadUserData(currentUser);
+      const role = loadedProfile?.role || currentUser?.user_metadata?.role || 'user';
+
+      if (!canAccessAdminScreen(role) && currentUser?.id) {
+        setScreen('home');
+        setScreenHistory(['login', 'home']);
+      } else {
+        routeAfterAuth(role);
       }
 
       setAuthLoading(false);

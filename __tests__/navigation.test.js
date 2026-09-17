@@ -3,6 +3,8 @@ import {
   getRoleScreen,
   resetAuthHistory,
   canAccessAdminScreen,
+  pushScreenHistory,
+  popScreenHistory,
 } from '../src/utils/navigation';
 
 describe('navigation helpers', () => {
@@ -25,5 +27,11 @@ describe('navigation helpers', () => {
     expect(resetAuthHistory()).toEqual(['login']);
     expect(canAccessAdminScreen('admin')).toBe(true);
     expect(canAccessAdminScreen('user')).toBe(false);
+  });
+
+  it('keeps admin user mode from creating duplicate dashboard history entries', () => {
+    expect(pushScreenHistory(['login', 'admin'], 'home')).toEqual(['login', 'admin', 'home']);
+    expect(popScreenHistory(['login', 'admin', 'home'])).toEqual(['login', 'admin']);
+    expect(pushScreenHistory(['login', 'admin', 'home'], 'admin')).toEqual(['login', 'admin']);
   });
 });

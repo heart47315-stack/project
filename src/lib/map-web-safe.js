@@ -240,10 +240,56 @@ if (isWeb) {
   } else {
     MapView = function SafeFallbackMapView({ style, children }) {
       return (
-        <View style={[{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F3F7FF', padding: 16 }, style]}>
-          <Text style={{ color: '#18365F', fontWeight: '600', textAlign: 'center' }}>
-            แผนที่ไม่พร้อมใช้งานในอุปกรณ์นี้
-          </Text>
+        <View
+          style={[
+            {
+              flex: 1,
+              justifyContent: 'center',
+              alignItems: 'center',
+              backgroundColor: '#EEF5FF',
+              padding: 16,
+              borderRadius: 18,
+              borderWidth: 1,
+              borderColor: '#D6E6FF',
+            },
+            style,
+          ]}
+        >
+          <View
+            style={{
+              width: '100%',
+              maxWidth: 320,
+              backgroundColor: '#FFFFFF',
+              borderRadius: 16,
+              padding: 18,
+              alignItems: 'center',
+              shadowColor: '#2F6FED',
+              shadowOpacity: 0.08,
+              shadowRadius: 12,
+              shadowOffset: { width: 0, height: 8 },
+              elevation: 4,
+            }}
+          >
+            <View
+              style={{
+                width: 52,
+                height: 52,
+                borderRadius: 16,
+                backgroundColor: '#DDEBFF',
+                justifyContent: 'center',
+                alignItems: 'center',
+                marginBottom: 10,
+              }}
+            >
+              <Text style={{ fontSize: 24 }}>📍</Text>
+            </View>
+            <Text style={{ color: '#18365F', fontWeight: '700', fontSize: 17, textAlign: 'center' }}>
+              แผนที่ไม่พร้อมใช้งานชั่วคราว
+            </Text>
+            <Text style={{ color: '#4C698A', fontSize: 12, textAlign: 'center', marginTop: 6, lineHeight: 18 }}>
+              ระบบกำลังประเมินเส้นทางและข้อมูลความปลอดภัยแบบออฟไลน์
+            </Text>
+          </View>
           {children}
         </View>
       );

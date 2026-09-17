@@ -2,6 +2,7 @@
   "expo": {
     "name": "MEDSAFE AI",
     "slug": "medsafe-ai",
+    "scheme": "medsafeai",
     "version": "1.0.0",
     "runtimeVersion": "1.0.0",
     "web": {

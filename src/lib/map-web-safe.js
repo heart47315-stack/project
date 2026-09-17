@@ -27,6 +27,7 @@ if (isWeb) {
     TileLayer,
     CircleMarker,
     Polyline: LeafletPolyline,
+    Tooltip,
     useMap,
   } = ReactLeaflet;
 
@@ -146,6 +147,8 @@ if (isWeb) {
    */
   Marker = function WebMarker({
     coordinate,
+    title,
+    children,
   }) {
     if (
       !coordinate ||
@@ -155,20 +158,29 @@ if (isWeb) {
       return null;
     }
 
+    const markerColor = title === 'ปลายทาง' ? '#2DB77A' : '#2F6FED';
+
     return (
       <CircleMarker
         center={[
           Number(coordinate.latitude),
           Number(coordinate.longitude),
         ]}
-        radius={9}
+        radius={title === 'ปลายทาง' ? 10 : 8}
         pathOptions={{
-          color: '#2F6FED',
-          fillColor: '#2F6FED',
+          color: markerColor,
+          fillColor: markerColor,
           fillOpacity: 0.9,
           weight: 3,
         }}
-      />
+      >
+        {title ? (
+          <Tooltip direction="top" offset={[0, -12]}>
+            {title}
+          </Tooltip>
+        ) : null}
+        {children}
+      </CircleMarker>
     );
   };
 

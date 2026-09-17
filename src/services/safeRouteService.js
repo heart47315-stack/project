@@ -1,5 +1,52 @@
 const EARTH_RADIUS_KM = 6371;
 
+export async function fetchRouteBetween(origin, destination) {
+  if (!origin || !destination) {
+    return { ok: false, error: 'missing-route-points', route: [] };
+  }
+
+  const from = normalizePoint(origin);
+  const to = normalizePoint(destination);
+
+  if (!from || !to) {
+    return { ok: false, error: 'invalid-route-points', route: [] };
+  }
+
+  try {
+    const url = `https://router.project-osrm.org/route/v1/driving/${from.longitude},${from.latitude};${to.longitude},${to.latitude}?overview=full&geometries=geojson&steps=false`;
+    const response = await fetch(url);
+    if (!response.ok) {
+      return { ok: false, error: 'osrm-unavailable', route: [] };
+    }
+
+    const payload = await response.json();
+    const route = extractRouteCoordinates(payload);
+
+    return {
+      ok: route.length >= 2,
+      error: route.length >= 2 ? null : 'no-route-found',
+      route,
+      raw: payload,
+    };
+  } catch {
+    return { ok: false, error: 'route-fetch-failed', route: [] };
+  }
+}
+
+export function extractRouteCoordinates(payload) {
+  const routes = Array.isArray(payload?.routes) ? payload.routes : [];
+  const candidate = routes[0]?.geometry;
+
+  if (!candidate || candidate.type !== 'LineString' || !Array.isArray(candidate.coordinates)) {
+    return [];
+  }
+
+  return candidate.coordinates.map(([longitude, latitude]) => ({
+    latitude: Number(latitude),
+    longitude: Number(longitude),
+  }));
+}
+
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }

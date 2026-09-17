@@ -34,7 +34,7 @@ import { getSavedItems, saveItem, removeSavedItem, isItemSaved } from './src/ser
 import { getUserSettings, updateUserSettings } from './src/services/settingsService';
 import { getAdminDashboard } from './src/services/adminService';
 import { searchHospitals, getNearbyHospitals } from './src/services/hospitalService';
-import { evaluateRouteRisk } from './src/services/safeRouteService';
+import { evaluateRouteRisk, fetchRouteBetween } from './src/services/safeRouteService';
 import { parseAuthUrl } from './src/lib/authRedirect';
 import { resolveBackTarget, pushScreenHistory, popScreenHistory } from './src/utils/navigation';
 import appPackage from './package.json';
@@ -356,9 +356,11 @@ function Register({ go, onSubmit }) {
           onChangeText={setConfirmPassword}
         />
 
-        <Pressable style={styles.checkRow} onPress={() => setAccepted((current) => !current)}>
-          <Ionicons name={accepted ? 'checkbox' : 'square-outline'} size={20} color={BLUE} />
-          <Text style={styles.muted}> ยอมรับเงื่อนไขการใช้งาน</Text>
+        <Pressable style={styles.checkRow} onPress={() => setAccepted((current) => !current)} accessibilityRole="checkbox" accessibilityState={{ checked: accepted }}>
+          <View style={[styles.checkBox, accepted && styles.checkBoxChecked]}>
+            {accepted ? <Text style={styles.checkMark}>✓</Text> : null}
+          </View>
+          <Text style={styles.checkText}>ยอมรับเงื่อนไขการใช้งาน</Text>
         </Pressable>
 
         <Button title="สมัครสมาชิก" onPress={handleSubmit} loading={loading} />
@@ -836,6 +838,7 @@ function SafeRoute({ go, goBack, onHistory }) {
     { latitude: 13.7611, longitude: 100.5081 },
     { latitude: 13.7657, longitude: 100.5162 },
   ]);
+  const [routeLoading, setRouteLoading] = useState(false);
   const [riskResult, setRiskResult] = useState(null);
   const [error, setError] = useState('');
   const locationWatcherRef = useRef(null);
@@ -870,6 +873,27 @@ function SafeRoute({ go, goBack, onHistory }) {
 
     if (!q) return [];
     return list.filter((item) => item.name.toLowerCase().includes(q) || item.address.toLowerCase().includes(q) || item.district.toLowerCase().includes(q));
+  };
+
+  const loadRealRoute = async (origin, destination) => {
+    if (!origin || !destination) return null;
+
+    setRouteLoading(true);
+    const result = await fetchRouteBetween(origin, destination);
+    setRouteLoading(false);
+
+    if (result.ok && result.route?.length >= 2) {
+      setRoutePoints(result.route);
+      const nextRisk = evaluateRouteRisk({
+        origin,
+        destination,
+        routePoints: result.route,
+      });
+      setRiskResult(nextRisk);
+      return result.route;
+    }
+
+    return null;
   };
 
   const assessCurrentLocation = async () => {
@@ -919,14 +943,21 @@ function SafeRoute({ go, goBack, onHistory }) {
       setRoutePoints(startPoints);
 
       if (selectedDestination) {
-        const routeFromCurrent = makeRoutePoints(origin, { latitude: selectedDestination.latitude, longitude: selectedDestination.longitude });
-        setRoutePoints(routeFromCurrent);
+        const realRoute = await loadRealRoute(origin, selectedDestination);
+        if (!realRoute) {
+          const routeFromCurrent = makeRoutePoints(origin, { latitude: selectedDestination.latitude, longitude: selectedDestination.longitude });
+          setRoutePoints(routeFromCurrent);
+        }
       }
+
+      const routePointsForRisk = selectedDestination
+        ? (routePoints?.length > 1 ? routePoints : makeRoutePoints(origin, selectedDestination))
+        : startPoints;
 
       const risk = evaluateRouteRisk({
         origin,
         destination: selectedDestination || null,
-        routePoints: selectedDestination ? makeRoutePoints(origin, selectedDestination) : startPoints,
+        routePoints: routePointsForRisk,
       });
       setRiskResult(risk);
 
@@ -1004,7 +1035,8 @@ function SafeRoute({ go, goBack, onHistory }) {
           ? { latitude: location.latitude, longitude: location.longitude }
           : { latitude: 13.7563, longitude: 100.5018 };
 
-        const routeFromSearch = makeRoutePoints(baseOrigin, safeDestination);
+        const realRoute = await loadRealRoute(baseOrigin, safeDestination);
+        const routeFromSearch = realRoute || makeRoutePoints(baseOrigin, safeDestination);
         setRoutePoints(routeFromSearch);
         setRiskResult(evaluateRouteRisk({ origin: baseOrigin, destination: safeDestination, routePoints: routeFromSearch }));
 
@@ -1028,7 +1060,8 @@ function SafeRoute({ go, goBack, onHistory }) {
           ? { latitude: location.latitude, longitude: location.longitude }
           : { latitude: 13.7563, longitude: 100.5018 };
 
-        const routeFromFallback = makeRoutePoints(baseOrigin, chosen);
+        const realRoute = await loadRealRoute(baseOrigin, chosen);
+        const routeFromFallback = realRoute || makeRoutePoints(baseOrigin, chosen);
         setRoutePoints(routeFromFallback);
         setRiskResult(evaluateRouteRisk({ origin: baseOrigin, destination: chosen, routePoints: routeFromFallback }));
       } else {
@@ -1052,7 +1085,8 @@ function SafeRoute({ go, goBack, onHistory }) {
           ? { latitude: location.latitude, longitude: location.longitude }
           : { latitude: 13.7563, longitude: 100.5018 };
 
-        const fallbackRoute = makeRoutePoints(baseOrigin, fallbackDestination);
+        const realRoute = await loadRealRoute(baseOrigin, fallbackDestination);
+        const fallbackRoute = realRoute || makeRoutePoints(baseOrigin, fallbackDestination);
         setRoutePoints(fallbackRoute);
         setRiskResult(evaluateRouteRisk({ origin: baseOrigin, destination: fallbackDestination, routePoints: fallbackRoute }));
       } else {
@@ -1090,12 +1124,12 @@ function SafeRoute({ go, goBack, onHistory }) {
       <View style={styles.routeMapWrap}>
         <MapView style={styles.map} initialRegion={mapRegion} region={mapRegion}>
           {location && (
-            <Marker coordinate={{ latitude: location.latitude, longitude: location.longitude }}>
+            <Marker coordinate={{ latitude: location.latitude, longitude: location.longitude }} title="ตำแหน่งปัจจุบัน">
               <View style={styles.markerDot} />
             </Marker>
           )}
           {selectedDestination && (
-            <Marker coordinate={{ latitude: selectedDestination.latitude, longitude: selectedDestination.longitude }}>
+            <Marker coordinate={{ latitude: selectedDestination.latitude, longitude: selectedDestination.longitude }} title="ปลายทาง">
               <View style={styles.markerDestination} />
             </Marker>
           )}
@@ -1151,6 +1185,25 @@ function SafeRoute({ go, goBack, onHistory }) {
           <Text style={styles.muted}>ปลายทาง: {selectedDestination.name || selectedDestination.title || 'สถานที่'} ({selectedDestination.latitude.toFixed(4)}, {selectedDestination.longitude.toFixed(4)})</Text>
         ) : null}
 
+        {(location || selectedDestination) ? (
+          <View style={styles.routeDetailBox}>
+            <View style={styles.routeDetailRow}>
+              <Text style={styles.routeDetailLabel}>เริ่มต้น</Text>
+              <Text style={styles.routeDetailValue}>{location ? `${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}` : 'ไม่ระบุ'}</Text>
+            </View>
+            <View style={styles.routeDetailRow}>
+              <Text style={styles.routeDetailLabel}>ปลายทาง</Text>
+              <Text style={styles.routeDetailValue}>{selectedDestination ? selectedDestination.name || 'สถานที่ที่เลือก' : 'ยังไม่ได้เลือก'}</Text>
+            </View>
+            {riskResult ? (
+              <View style={styles.routeDetailRow}>
+                <Text style={styles.routeDetailLabel}>ระยะทาง</Text>
+                <Text style={styles.routeDetailValue}>{riskResult.distanceKm} กม.</Text>
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+
         {riskResult ? (
           <View style={styles.riskReport}>
             <View style={styles.scoreRow}>
@@ -1162,8 +1215,10 @@ function SafeRoute({ go, goBack, onHistory }) {
           </View>
         ) : null}
 
+        {routeLoading ? <Text style={[styles.muted, { marginTop: 8 }]}>กำลังโหลดเส้นทางจริงจาก OSRM...</Text> : null}
+
         {error ? <Text style={styles.errorBox}>{error}</Text> : null}
-        <Button title="ประเมินตำแหน่งปัจจุบัน" onPress={assessCurrentLocation} loading={loading} />
+        <Button title="ประเมินตำแหน่งปัจจุบัน" onPress={assessCurrentLocation} loading={loading || routeLoading} />
       </View>
       <BottomNav active="route" go={go} />
     </SafeAreaView>
@@ -1676,7 +1731,11 @@ const styles = StyleSheet.create({
   link: { color: BLUE, fontWeight: '700' },
   or: { textAlign: 'center', color: '#98A7B9', marginVertical: 8 },
   register: { textAlign: 'center', marginTop: 20, color: '#7186A3' },
-  checkRow: { flexDirection: 'row', alignItems: 'center', marginTop: 18 },
+  checkRow: { flexDirection: 'row', alignItems: 'center', marginTop: 18, paddingVertical: 6 },
+  checkBox: { width: 20, height: 20, borderRadius: 5, borderWidth: 2, borderColor: '#9BB3D7', backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center' },
+  checkBoxChecked: { backgroundColor: BLUE, borderColor: BLUE },
+  checkMark: { color: '#fff', fontSize: 13, fontWeight: '800', lineHeight: 13 },
+  checkText: { color: DARK, fontSize: 14, fontWeight: '600', marginLeft: 10, flexShrink: 1 },
   errorBox: { backgroundColor: '#FFEAEA', borderColor: '#F2B4B4', borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, marginTop: 12, color: '#B12F2F', fontWeight: '600' },
   home: { padding: 18, paddingBottom: 100 },
   homeHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
@@ -1723,6 +1782,10 @@ const styles = StyleSheet.create({
   map: { width: '100%', height: 230 },
   markerDot: { width: 14, height: 14, borderRadius: 7, backgroundColor: RED, borderWidth: 2, borderColor: '#fff' },
   markerDestination: { width: 16, height: 16, borderRadius: 8, backgroundColor: GREEN, borderWidth: 2, borderColor: '#fff' },
+  routeDetailBox: { backgroundColor: '#F8FBFF', borderWidth: 1, borderColor: BORDER, borderRadius: 10, padding: 10, marginTop: 12 },
+  routeDetailRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6, gap: 8 },
+  routeDetailLabel: { color: '#60789A', fontWeight: '700', fontSize: 11 },
+  routeDetailValue: { color: DARK, fontWeight: '700', fontSize: 11, textAlign: 'right', flexShrink: 1 },
   searchRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
   routeSearchInput: { flex: 1, height: 45, borderWidth: 1, borderColor: BORDER, borderRadius: 10, backgroundColor: '#fff', paddingHorizontal: 14, color: DARK },
   routeSearchButton: { width: 45, height: 45, borderRadius: 10, backgroundColor: BLUE, alignItems: 'center', justifyContent: 'center' },

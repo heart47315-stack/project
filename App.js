@@ -1321,11 +1321,18 @@ function Header({ title, go, goBack, backTarget = 'home' }) {
 
   return (
     <View style={styles.header}>
-      <Pressable onPress={handleBack} style={styles.headerSideButton} accessibilityRole="button" accessibilityLabel={`ย้อนกลับไป ${safeBackTarget}`}>
+      <Pressable
+        onPress={handleBack}
+        style={styles.headerBackButton}
+        accessibilityRole="button"
+        accessibilityLabel={`ย้อนกลับไป ${safeBackTarget}`}
+      >
         <Ionicons name="arrow-back" size={24} color={DARK} />
       </Pressable>
+
       <Text style={styles.headerTitle}>{title}</Text>
-      <View style={styles.headerSideButton} accessibilityRole="button" accessibilityLabel="การแจ้งเตือน">
+
+      <View style={styles.headerRightButton} accessibilityRole="button" accessibilityLabel="การแจ้งเตือน">
         <Ionicons name="notifications-outline" size={23} color={DARK} />
       </View>
     </View>
@@ -1751,9 +1758,36 @@ const styles = StyleSheet.create({
   bottom: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 68, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#E4ECF7', flexDirection: 'row', justifyContent: 'space-around', paddingTop: 8 },
   navItem: { alignItems: 'center', width: 65 },
   navText: { fontSize: 9, color: '#9AA8BA', marginTop: 2 },
-  header: { height: 64, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#E5ECF6', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18 },
-  headerSideButton: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
-  headerTitle: { flex: 1, textAlign: 'center', fontSize: 17, fontWeight: '800', color: DARK, marginHorizontal: 8 },
+  header: {
+    height: 70,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5ECF6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  headerBackButton: {
+    position: 'absolute',
+    left: 12,
+    top: 14,
+    width: 42,
+    height: 42,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+    elevation: 10,
+  },
+  headerRightButton: {
+    position: 'absolute',
+    right: 12,
+    top: 14,
+    width: 42,
+    height: 42,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerTitle: { textAlign: 'center', fontSize: 20, fontWeight: '700', color: DARK },
   chatScroll: { flex: 1 },
   chat: { padding: 16, paddingBottom: 24, flexGrow: 1 },
   bubble: { maxWidth: '82%', padding: 12, borderRadius: 15, marginBottom: 10 },

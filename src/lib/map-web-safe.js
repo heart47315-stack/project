@@ -9,7 +9,7 @@ let Polyline;
 
 /**
  * ---------------------------------------------------------
- * Shared helpers
+ * ตัวช่วยร่วมใช้
  * ---------------------------------------------------------
  */
 
@@ -25,8 +25,8 @@ function StyleSheetLike(style) {
 
   const result = { ...style };
 
-  // React Native flex is handled by the outer RN View.
-  // Leaflet itself should receive normal CSS sizing.
+  // flex ของ React Native จะถูกจัดการโดย View ภายนอก
+  // Leaflet ควรได้รับการปรับขนาด CSS แบบปกติ
   delete result.flex;
 
   return result;
@@ -48,7 +48,7 @@ function normalizeCoordinate(coordinate) {
 }
 
 function getDefaultCenter() {
-  // Bangkok fallback
+  // ค่าเริ่มต้นสำรองสำหรับกรุงเทพฯ
   return [13.7563, 100.5018];
 }
 
@@ -84,8 +84,8 @@ function getZoom(region) {
 }
 
 /**
- * Prevent </script> or HTML characters from breaking
- * the inline HTML generated for the native WebView.
+ * ป้องกัน </script> หรืออักขระ HTML
+ * ที่อาจทำลาย HTML แบบ inline ที่สร้างสำหรับ WebView บน native
  */
 function safeJson(value) {
   return JSON.stringify(value ?? [])
@@ -96,7 +96,7 @@ function safeJson(value) {
 
 /**
  * ---------------------------------------------------------
- * WEB
+ * เว็บ
  * Leaflet + OpenStreetMap
  * ---------------------------------------------------------
  */
@@ -105,7 +105,7 @@ if (isWeb) {
   const ReactLeaflet = require('react-leaflet');
 
   /*
-   * Load Leaflet CSS once.
+   * โหลด Leaflet CSS ครั้งเดียว
    */
   if (typeof document !== 'undefined') {
     if (!document.getElementById('leaflet-css')) {
@@ -130,7 +130,7 @@ if (isWeb) {
   } = ReactLeaflet;
 
   /**
-   * Update Leaflet map when App.js changes region.
+   * อัปเดตแผนที่ Leaflet เมื่อ App.js เปลี่ยน region
    */
   function RegionUpdater({ region }) {
     const map = useMap();
@@ -154,9 +154,9 @@ if (isWeb) {
   }
 
   /**
-   * Web MapView
+   * แผนที่สำหรับเว็บ
    *
-   * API-compatible enough for the existing App.js:
+   * เข้ากันได้กับ App.js ที่มีอยู่เพียงพอ:
    *
    * <MapView
    *   initialRegion={...}
@@ -211,15 +211,15 @@ if (isWeb) {
   };
 
   /**
-   * Web Marker
+   * Marker สำหรับเว็บ
    *
-   * React Native:
+   * รีแอ็กต์ เนทีฟ:
    * <Marker
    *   coordinate={{ latitude, longitude }}
    *   title="..."
    * />
    *
-   * becomes Leaflet CircleMarker.
+   * จะกลายเป็น Leaflet CircleMarker
    */
   Marker = function WebMarker({
     coordinate,
@@ -264,7 +264,7 @@ if (isWeb) {
   };
 
   /**
-   * Web Polyline
+   * Polyline สำหรับเว็บ
    */
   Polyline = function WebPolyline({
     coordinates = [],
@@ -303,10 +303,10 @@ if (isWeb) {
 /**
  * ---------------------------------------------------------
  * ANDROID / IOS
- * Leaflet + OpenStreetMap inside WebView
+ * Leaflet + OpenStreetMap ภายใน WebView
  *
- * NO react-native-maps
- * NO Google Maps API
+ * ไม่มี react-native-maps
+ * ไม่มี Google Maps API
  * ---------------------------------------------------------
  */
 
@@ -322,12 +322,12 @@ else {
   }
 
   /**
-   * These are placeholders used while App.js creates
-   * the children tree.
+   * สิ่งนี้เป็น placeholder ที่ใช้ขณะ App.js
+   * สร้างโครงสร้าง children
    *
-   * They don't render directly.
-   * NativeOsmMapView reads their props and converts them
-   * to Leaflet objects inside the WebView.
+   * ไม่ถูกเรนเดอร์โดยตรง
+   * NativeOsmMapView จะอ่าน props ดังกล่าวแล้วแปลงเป็น
+   * อ็อบเจ็กต์ Leaflet ภายใน WebView
    */
   Marker = function NativeOsmMarker() {
     return null;
@@ -338,7 +338,7 @@ else {
   };
 
   /**
-   * Extract markers and polylines from App.js children.
+   * ดึง markers และ polylines จาก children ของ App.js
    */
   function collectMapData(children) {
     const markers = [];
@@ -411,8 +411,8 @@ else {
   }
 
   /**
-   * Generate the HTML document rendered inside
-   * react-native-webview.
+   * สร้างเอกสาร HTML ที่ถูกเรนเดอร์ภายใน
+   * react-native-webview
    */
   function createNativeOsmHtml(
     region,
@@ -495,7 +495,7 @@ const polylines =
   ${safeJson(polylines)};
 
 /**
- * Create map
+ * สร้างแผนที่
  */
 const map =
   L.map('map', {
@@ -508,7 +508,7 @@ const map =
   );
 
 /**
- * OpenStreetMap tiles
+ * ไทล์ OpenStreetMap
  */
 L.tileLayer(
   'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
@@ -520,7 +520,7 @@ L.tileLayer(
 ).addTo(map);
 
 /**
- * Markers
+ * ตัวทำเครื่องหมาย
  */
 markers.forEach((item) => {
 
@@ -568,7 +568,7 @@ markers.forEach((item) => {
 });
 
 /**
- * Route lines
+ * เส้นทาง
  */
 polylines.forEach((line) => {
 
@@ -601,8 +601,8 @@ polylines.forEach((line) => {
 });
 
 /**
- * Make sure Leaflet calculates the correct
- * WebView dimensions after loading.
+ * ตรวจสอบให้แน่ใจว่า Leaflet คำนวณขนาดของ
+ * WebView ให้ถูกต้องหลังจากโหลดเสร็จ
  */
 setTimeout(() => {
   map.invalidateSize();
@@ -629,8 +629,8 @@ window.addEventListener(
   /**
    * Native MapView
    *
-   * This component keeps the same general API
-   * expected by the existing App.js.
+   * คอมโพเนนต์นี้รักษา API ทั่วไปให้สอดคล้องกับ
+   * App.js ที่มีอยู่เดิม
    */
   MapView = function NativeOsmMapView({
     style,
@@ -687,7 +687,7 @@ window.addEventListener(
 
 /**
  * ---------------------------------------------------------
- * Exports
+ * ส่งออก
  * ---------------------------------------------------------
  */
 

@@ -1,9 +1,13 @@
+
 {
   "expo": {
     "name": "MEDSAFE AI",
     "slug": "medsafe-ai",
     "scheme": "medsafeai",
     "version": "1.0.0",
+    "android": {
+      "versionCode": 25
+    },
     "runtimeVersion": "1.0.0",
     "web": {
       "output": "single",
@@ -16,6 +20,10 @@
     },
     "updates": {
       "url": "https://u.expo.dev/faf23790-fddd-4b0b-901e-a55720bceef8"
-    }
+    },
+    "plugins": [
+      "expo-asset",
+      "expo-font"
+    ]
   }
 }

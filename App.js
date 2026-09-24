@@ -1652,8 +1652,8 @@ export default function App() {
     const response = await updatePassword(password);
     if (response.error) return response;
 
-    // Password recovery sessions are short-lived and should not leave the
-    // user stuck on the reset screen after a successful update.
+    // เซสชันกู้คืนรหัสผ่านมีอายุสั้นและไม่ควรทิ้งให้ผู้ใช้ติดอยู่
+    // บนหน้าล้างรหัสผ่านหลังจากอัปเดตสำเร็จ
     await supabase.auth.signOut();
     resetAuthState();
     return response;

@@ -107,7 +107,7 @@ export function evaluateRouteRisk({ origin, destination, routePoints = [] }) {
   const segmentCount = Math.max(points.length - 1, 1);
   const pointSpread = Math.min(35, Math.max(0, points.length * 4));
 
-  // Weighted deterministic risk score, no API dependency.
+  // คะแนนความเสี่ยงแบบ deterministic ที่ถ่วงน้ำหนักโดยไม่พึ่ง API ภายนอก
   const distanceComponent = clamp(distanceKm * 4.2, 0, 35);
   const routeComplexity = clamp(segmentCount * 8, 0, 25);
   const spreadComponent = clamp(pointSpread, 0, 18);

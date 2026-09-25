@@ -1,5 +1,6 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef, useContext } from 'react';
 import * as Updates from 'expo-updates';
+import { DEFAULT_LANGUAGE, getLanguageText, normalizeLanguage } from './src/utils/i18n';
 import {
   SafeAreaView,
   View,
@@ -53,7 +54,21 @@ const BORDER = '#DCE6F5';
 const GREEN = '#2DB77A';
 const RED = '#E95454';
 
+// LanguageContext ทำหน้าที่เก็บภาษาปัจจุบันของแอป
+// โดยค่าดั้งเดิมจะใช้ภาษาไทยและทุกฟังก์ชันที่ต้องแสดงข้อความสามารถเรียก useLocalizedText() เพื่อให้ได้ string ตามภาษาที่เลือก
+// วิธีนี้ช่วยให้ UI ไม่ต้อง hardcode ข้อความแต่ละหน้า และทำให้สามารถเปลี่ยนภาษาแบบ real-time ได้
+const LanguageContext = React.createContext(DEFAULT_LANGUAGE);
+
+function useLocalizedText() {
+  const language = useContext(LanguageContext);
+  // t() เป็น helper หลักที่อ่าน key ของข้อความจาก i18n แล้วคืนค่าในภาษาที่ active อยู่
+  // ถ้า key ไม่พบ จะใช้ fallback ที่ส่งเข้ามา หรือกลับไปใช้ภาษาไทยเป็นค่าเริ่มต้น
+  const t = (key, fallback = '') => getLanguageText(language, key, fallback);
+  return { language, t };
+}
+
 function Logo({ small = false }) {
+  const { t } = useLocalizedText();
   return (
     <View style={styles.logoRow}>
       <View style={[styles.logoBox, small && styles.logoSmall]}>
@@ -62,8 +77,8 @@ function Logo({ small = false }) {
       </View>
       {!small && (
         <View>
-          <Text style={styles.logoText}>MEDSAFE AI</Text>
-          <Text style={styles.logoSub}>ผู้ช่วยสุขภาพอัจฉริยะด้วย AI</Text>
+          <Text style={styles.logoText}>{t('appName')}</Text>
+          <Text style={styles.logoSub}>{t('appSubtitle')}</Text>
         </View>
       )}
     </View>
@@ -71,6 +86,7 @@ function Logo({ small = false }) {
 }
 
 function Button({ title, onPress, secondary = false, icon, loading = false, disabled = false }) {
+  const { t } = useLocalizedText();
   return (
     <Pressable
       onPress={onPress}
@@ -78,38 +94,40 @@ function Button({ title, onPress, secondary = false, icon, loading = false, disa
       style={[styles.button, secondary && styles.buttonSecondary, (loading || disabled) && styles.buttonDisabled]}
     >
       {icon && <Ionicons name={icon} size={18} color={secondary ? BLUE : '#fff'} />}
-      <Text style={[styles.buttonText, secondary && styles.buttonTextSecondary]}>{loading ? 'กำลังทำงาน...' : title}</Text>
+      <Text style={[styles.buttonText, secondary && styles.buttonTextSecondary]}>{loading ? t('loginLoading') : title}</Text>
     </Pressable>
   );
 }
 
 function Splash({ go }) {
+  const { t } = useLocalizedText();
   return (
     <SafeAreaView style={styles.splash}>
       <View style={styles.splashCenter}>
         <Logo />
         <MaterialCommunityIcons name="human" size={155} color="#76A7F7" style={{ marginTop: 22 }} />
-        <Text style={styles.splashTag}>สุขภาพของคุณ คือสิ่งสำคัญของเรา</Text>
+        <Text style={styles.splashTag}>{t('appSubtitleShort')}</Text>
       </View>
       <Pressable onPress={() => go('onboard1')} style={styles.skip}>
-        <Text style={styles.muted}>เริ่มต้นใช้งาน →</Text>
+        <Text style={styles.muted}>{t('startNow')} →</Text>
       </Pressable>
     </SafeAreaView>
   );
 }
 
 function Onboarding({ go, step }) {
+  const { t } = useLocalizedText();
   const data = {
-    onboard1: ['AI ด้านสุขภาพ', 'ถามคำถามเกี่ยวกับสุขภาพ\nค้นหาข้อมูลทางการแพทย์\nด้วย AI อัจฉริยะ', 'human'],
-    onboard2: ['ความปลอดภัยด้านยา', 'ตรวจสอบข้อมูลยาและ\nการใช้ยาอย่างปลอดภัย\nเพื่อสุขภาพที่ดีขึ้น', 'pill'],
-    onboard3: ['เส้นทางปลอดภัยด้วย AI', 'วิเคราะห์เส้นทางและ\nความเสี่ยงโดย AI\nเพื่อการเดินทางที่ปลอดภัย', 'map-marker-path'],
+    onboard1: [t('healthAI'), 'ถามคำถามเกี่ยวกับสุขภาพ\nค้นหาข้อมูลทางการแพทย์\nด้วย AI อัจฉริยะ', 'human'],
+    onboard2: [t('drugSafety'), 'ตรวจสอบข้อมูลยาและ\nการใช้ยาอย่างปลอดภัย\nเพื่อสุขภาพที่ดีขึ้น', 'pill'],
+    onboard3: [t('routeSafety'), 'วิเคราะห์เส้นทางและ\nความเสี่ยงโดย AI\nเพื่อการเดินทางที่ปลอดภัย', 'map-marker-path'],
   }[step];
 
   return (
     <SafeAreaView style={styles.screen}>
       <View style={styles.onboardTop}>
         <Text style={styles.step}>0{step.slice(-1)} / 3</Text>
-        <Pressable onPress={() => go('login')}><Text style={styles.skipText}>ข้าม</Text></Pressable>
+        <Pressable onPress={() => go('login')}><Text style={styles.skipText}>{t('skip')}</Text></Pressable>
       </View>
       <View style={styles.onboardCenter}>
         <Text style={styles.heroTitle}>{data[0]}</Text>
@@ -122,13 +140,14 @@ function Onboarding({ go, step }) {
         <View style={styles.dots}>
           {[1, 2, 3].map((n) => <View key={n} style={[styles.dot, step === `onboard${n}` && styles.dotActive]} />)}
         </View>
-        <Button title={step === 'onboard3' ? 'เริ่มใช้งาน' : 'ถัดไป'} onPress={() => go(step === 'onboard1' ? 'onboard2' : step === 'onboard2' ? 'onboard3' : 'login')} />
+        <Button title={step === 'onboard3' ? t('begin') : t('next')} onPress={() => go(step === 'onboard1' ? 'onboard2' : step === 'onboard2' ? 'onboard3' : 'login')} />
       </View>
     </SafeAreaView>
   );
 }
 
 function Login({ go, onSubmit, onForgot }) {
+  const { t } = useLocalizedText();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -155,12 +174,12 @@ function Login({ go, onSubmit, onForgot }) {
     <SafeAreaView style={styles.screen}>
       <View style={styles.auth}>
         <Logo />
-        <Text style={styles.authTitle}>ยินดีต้อนรับกลับ</Text>
-        <Text style={styles.muted}>เข้าสู่ระบบเพื่อใช้งาน MedSafe AI</Text>
+        <Text style={styles.authTitle}>{t('welcomeBack')}</Text>
+        <Text style={styles.muted}>{t('loginSubtitle')}</Text>
 
         {error ? <Text style={styles.errorBox}>{error}</Text> : null}
 
-        <Text style={styles.label}>อีเมล</Text>
+        <Text style={styles.label}>{t('email')}</Text>
         <TextInput
           style={styles.input}
           placeholder="example@email.com"
@@ -173,7 +192,7 @@ function Login({ go, onSubmit, onForgot }) {
           onChangeText={setEmail}
         />
 
-        <Text style={styles.label}>รหัสผ่าน</Text>
+        <Text style={styles.label}>{t('password')}</Text>
         <TextInput
           style={styles.input}
           placeholder="••••••••"
@@ -186,12 +205,12 @@ function Login({ go, onSubmit, onForgot }) {
           onChangeText={setPassword}
         />
 
-        <Pressable style={styles.forgot} onPress={() => onForgot(email)}><Text style={styles.link}>ลืมรหัสผ่าน?</Text></Pressable>
-        <Button title="เข้าสู่ระบบ" onPress={handleSubmit} loading={loading} />
-        <Text style={styles.or}>หรือ</Text>
-        <Text style={[styles.muted, { textAlign: 'center', marginTop: 14 }]}>Google Login ยังไม่ได้เปิดใช้งานใน Supabase configuration</Text>
+        <Pressable style={styles.forgot} onPress={() => onForgot(email)}><Text style={styles.link}>{t('forgotPassword')}</Text></Pressable>
+        <Button title={t('login')} onPress={handleSubmit} loading={loading} />
+        <Text style={styles.or}>{t('or')}</Text>
+        <Text style={[styles.muted, { textAlign: 'center', marginTop: 14 }]}>{t('googleInfo')}</Text>
         <Pressable onPress={() => go('register')}>
-          <Text style={styles.register}>ยังไม่มีบัญชี? <Text style={styles.link}>สมัครสมาชิก</Text></Text>
+          <Text style={styles.register}>{t('noAccount')} <Text style={styles.link}>{t('createAccount')}</Text></Text>
         </Pressable>
       </View>
     </SafeAreaView>
@@ -199,6 +218,7 @@ function Login({ go, onSubmit, onForgot }) {
 }
 
 function Register({ go, onSubmit }) {
+  const { t } = useLocalizedText();
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -268,14 +288,14 @@ function Register({ go, onSubmit }) {
     <SafeAreaView style={styles.screen}>
       <ScrollView contentContainerStyle={styles.auth}>
         <Logo />
-        <Text style={styles.authTitle}>สร้างบัญชีใหม่</Text>
+        <Text style={styles.authTitle}>{t('registerTitle')}</Text>
 
         {error ? <Text style={styles.errorBox}>{error}</Text> : null}
 
-        <Text style={styles.label}>ชื่อ-นามสกุล</Text>
+        <Text style={styles.label}>{t('fullName')}</Text>
         <TextInput style={styles.input} placeholder="กรอกชื่อ-นามสกุล" value={fullName} autoCapitalize="words" autoCorrect={false} onChangeText={setFullName} />
 
-        <Text style={styles.label}>อีเมล</Text>
+        <Text style={styles.label}>{t('email')}</Text>
         <TextInput
           style={styles.input}
           placeholder="example@email.com"
@@ -287,7 +307,7 @@ function Register({ go, onSubmit }) {
           onChangeText={setEmail}
         />
 
-        <Text style={styles.label}>วันเกิด (YYYY-MM-DD)</Text>
+        <Text style={styles.label}>{t('dob')}</Text>
         <TextInput
           style={styles.input}
           placeholder="2026-01-31"
@@ -298,7 +318,7 @@ function Register({ go, onSubmit }) {
           inputMode="numeric"
         />
 
-        <Text style={styles.label}>เพศ</Text>
+        <Text style={styles.label}>{t('gender')}</Text>
         <TextInput
           style={styles.input}
           placeholder="ชาย / หญิง / อื่นๆ"
@@ -309,7 +329,7 @@ function Register({ go, onSubmit }) {
           inputMode="text"
         />
 
-        <Text style={styles.label}>ส่วนสูง (cm)</Text>
+        <Text style={styles.label}>{t('height')}</Text>
         <TextInput
           style={styles.input}
           placeholder="170"
@@ -319,7 +339,7 @@ function Register({ go, onSubmit }) {
           onChangeText={setHeight}
         />
 
-        <Text style={styles.label}>น้ำหนัก (kg)</Text>
+        <Text style={styles.label}>{t('weight')}</Text>
         <TextInput
           style={styles.input}
           placeholder="65"
@@ -329,7 +349,7 @@ function Register({ go, onSubmit }) {
           onChangeText={setWeight}
         />
 
-        <Text style={styles.label}>กรุ๊ปเลือด</Text>
+        <Text style={styles.label}>{t('bloodType')}</Text>
         <TextInput
           style={styles.input}
           placeholder="A, B, AB, O"
@@ -340,7 +360,7 @@ function Register({ go, onSubmit }) {
           inputMode="text"
         />
 
-        <Text style={styles.label}>รหัสผ่าน</Text>
+        <Text style={styles.label}>{t('password')}</Text>
         <TextInput
           style={styles.input}
           placeholder="••••••••"
@@ -352,7 +372,7 @@ function Register({ go, onSubmit }) {
           onChangeText={setPassword}
         />
 
-        <Text style={styles.label}>ยืนยันรหัสผ่าน</Text>
+        <Text style={styles.label}>{t('confirmPassword')}</Text>
         <TextInput
           style={styles.input}
           placeholder="••••••••"
@@ -368,12 +388,12 @@ function Register({ go, onSubmit }) {
           <View style={[styles.checkBox, accepted && styles.checkBoxChecked]}>
             {accepted ? <Text style={styles.checkMark}>✓</Text> : null}
           </View>
-          <Text style={styles.checkText}>ยอมรับเงื่อนไขการใช้งาน</Text>
+          <Text style={styles.checkText}>{t('acceptTerms')}</Text>
         </Pressable>
 
-        <Button title="สมัครสมาชิก" onPress={handleSubmit} loading={loading} />
+        <Button title={t('createAccount')} onPress={handleSubmit} loading={loading} />
         <Pressable onPress={() => go('login')}>
-          <Text style={styles.register}>มีบัญชีแล้ว? <Text style={styles.link}>เข้าสู่ระบบ</Text></Text>
+          <Text style={styles.register}>{t('haveAccount')} <Text style={styles.link}>{t('login')}</Text></Text>
         </Pressable>
       </ScrollView>
     </SafeAreaView>
@@ -381,6 +401,7 @@ function Register({ go, onSubmit }) {
 }
 
 function ForgotPassword({ go, onSubmit }) {
+  const { t } = useLocalizedText();
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
@@ -420,15 +441,15 @@ function ForgotPassword({ go, onSubmit }) {
         </View>
 
         <Logo />
-        <Text style={styles.authTitle}>ลืมรหัสผ่าน</Text>
+        <Text style={styles.authTitle}>{t('resetPasswordTitle')}</Text>
         <Text style={[styles.muted, { marginBottom: 18 }]}>
-          กรอกอีเมลที่ใช้สมัครสมาชิก แล้วเราจะส่งลิงก์สำหรับตั้งรหัสผ่านใหม่ให้
+          {t('resetPasswordSubtitle')}
         </Text>
 
         {error ? <Text style={styles.errorBox}>{error}</Text> : null}
         {message ? <Text style={styles.successBox}>{message}</Text> : null}
 
-        <Text style={styles.label}>อีเมล</Text>
+        <Text style={styles.label}>{t('email')}</Text>
         <TextInput
           style={styles.input}
           placeholder="example@email.com"
@@ -441,9 +462,9 @@ function ForgotPassword({ go, onSubmit }) {
           onChangeText={setEmail}
         />
 
-        <Button title="ส่งอีเมลเปลี่ยนรหัสผ่าน" onPress={handleSubmit} loading={loading} />
+        <Button title={t('sendResetEmail')} onPress={handleSubmit} loading={loading} />
         <Pressable onPress={() => go('login')} style={{ marginTop: 16 }}>
-          <Text style={[styles.link, { textAlign: 'center' }]}>กลับไปหน้าเข้าสู่ระบบ</Text>
+          <Text style={[styles.link, { textAlign: 'center' }]}>{t('backToLogin')}</Text>
         </Pressable>
       </ScrollView>
     </SafeAreaView>
@@ -451,6 +472,7 @@ function ForgotPassword({ go, onSubmit }) {
 }
 
 function ResetPassword({ go, onSubmit }) {
+  const { t } = useLocalizedText();
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -498,48 +520,49 @@ function ResetPassword({ go, onSubmit }) {
         </View>
 
         <Logo />
-        <Text style={styles.authTitle}>ตั้งรหัสผ่านใหม่</Text>
+        <Text style={styles.authTitle}>{t('setNewPassword')}</Text>
         <Text style={[styles.muted, { marginBottom: 18 }]}>
-          ตั้งรหัสผ่านใหม่อย่างน้อย 8 ตัวอักษร
+          {t('password')} / {t('newPassword')}
         </Text>
 
         {error ? <Text style={styles.errorBox}>{error}</Text> : null}
 
-        <Text style={styles.label}>รหัสผ่านใหม่</Text>
+        <Text style={styles.label}>{t('newPassword')}</Text>
         <TextInput style={styles.input} placeholder="อย่างน้อย 8 ตัวอักษร" secureTextEntry value={password} autoCapitalize="none" autoCorrect={false} textContentType="newPassword" inputMode="text" onChangeText={setPassword} />
 
-        <Text style={styles.label}>ยืนยันรหัสผ่านใหม่</Text>
+        <Text style={styles.label}>{t('confirmNewPassword')}</Text>
         <TextInput style={styles.input} placeholder="กรอกรหัสผ่านอีกครั้ง" secureTextEntry value={confirmPassword} autoCapitalize="none" autoCorrect={false} textContentType="newPassword" inputMode="text" onChangeText={setConfirmPassword} />
 
-        <Button title="บันทึกรหัสผ่านใหม่" onPress={handleSubmit} loading={loading} />
+        <Button title={t('saveNewPassword')} onPress={handleSubmit} loading={loading} />
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 function Home({ go, goBack, user, profile, onSearch, onReturnToAdmin, isAdminUserMode }) {
+  const { t } = useLocalizedText();
   const [query, setQuery] = useState('');
   const cards = [
-    ['AI ด้านสุขภาพ', 'ถามคำถามทางการแพทย์', 'meditation', 'chat'],
-    ['ความปลอดภัยด้านยา', 'ตรวจสอบข้อมูลยาและความปลอดภัย', 'pill', 'drugs'],
-    ['เส้นทางปลอดภัยด้วย AI', 'วิเคราะห์เส้นทางที่ปลอดภัย', 'map-marker-path', 'route'],
+    [t('healthAI'), 'ถามคำถามทางการแพทย์', 'meditation', 'chat'],
+    [t('drugSafety'), 'ตรวจสอบข้อมูลยาและความปลอดภัย', 'pill', 'drugs'],
+    [t('routeSafety'), 'วิเคราะห์เส้นทางที่ปลอดภัย', 'map-marker-path', 'route'],
   ];
-  const displayName = profile?.full_name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'ผู้ใช้งาน';
+  const displayName = profile?.full_name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || t('user');
 
   return (
     <SafeAreaView style={styles.screen}>
       <ScrollView contentContainerStyle={styles.home}>
         <View style={styles.homeHeader}>
           <View>
-            <Text style={styles.greeting}>สวัสดีค่ะ, {displayName} 👋</Text>
-            <Text style={styles.muted}>วันนี้ให้ MedSafe AI ช่วยอะไรคุณ?</Text>
+            <Text style={styles.greeting}>{t('homeGreeting').replace('{name}', displayName)}</Text>
+            <Text style={styles.muted}>{t('homeSubtitle')}</Text>
           </View>
           <View style={styles.avatar}><Text>{displayName.charAt(0).toUpperCase()}</Text></View>
         </View>
 
         {profile?.role === 'admin' && isAdminUserMode ? (
           <Pressable onPress={onReturnToAdmin} style={[styles.adminToggle, styles.adminToggleActive]}>
-            <Text style={styles.adminToggleText}>กลับ Admin Dashboard</Text>
+            <Text style={styles.adminToggleText}>{t('adminDashboard')}</Text>
           </Pressable>
         ) : null}
 
@@ -549,7 +572,7 @@ function Home({ go, goBack, user, profile, onSearch, onReturnToAdmin, isAdminUse
             value={query}
             onChangeText={setQuery}
             onSubmitEditing={() => onSearch(query)}
-            placeholder="ค้นหาข้อมูลยา อาการ..."
+            placeholder={t('searchPlaceholder')}
             autoCapitalize="none"
             autoCorrect={false}
             inputMode="text"
@@ -557,7 +580,7 @@ function Home({ go, goBack, user, profile, onSearch, onReturnToAdmin, isAdminUse
             style={{ flex: 1 }}
           />
           {query ? (
-            <Pressable accessibilityLabel="ล้างคำค้นหา" onPress={() => setQuery('')}>
+            <Pressable accessibilityLabel={t('clearSearch')} onPress={() => setQuery('')}>
               <Ionicons name="close-circle" size={18} color="#8B9AB2" />
             </Pressable>
           ) : null}
@@ -574,15 +597,15 @@ function Home({ go, goBack, user, profile, onSearch, onReturnToAdmin, isAdminUse
           </Pressable>
         ))}
 
-        <Text style={styles.sectionTitle}>การใช้งานล่าสุด</Text>
+        <Text style={styles.sectionTitle}>{t('latestUsage')}</Text>
         <View style={styles.history}>
           <Ionicons name="medkit-outline" size={23} color={BLUE} />
           <View style={{ flex: 1, marginLeft: 12 }}>
-            <Text style={styles.bold}>ค้นหายา</Text>
-            <Text style={styles.muted}>ใช้ข้อมูลจากฐานข้อมูลยา</Text>
+            <Text style={styles.bold}>{t('searchDrug')}</Text>
+            <Text style={styles.muted}>{t('searchDrugSubtitle')}</Text>
           </View>
           <Pressable onPress={() => go('drugs')}>
-            <Text style={styles.link}>ค้นหา</Text>
+            <Text style={styles.link}>{t('searchButton')}</Text>
           </Pressable>
         </View>
       </ScrollView>
@@ -592,6 +615,7 @@ function Home({ go, goBack, user, profile, onSearch, onReturnToAdmin, isAdminUse
 }
 
 function MedicalAI({ go, goBack, onHistory }) {
+  const { t } = useLocalizedText();
   const [msg, setMsg] = useState('');
   const [messages, setMessages] = useState([]);
   const [error, setError] = useState('');
@@ -628,7 +652,7 @@ function MedicalAI({ go, goBack, onHistory }) {
 
   return (
     <SafeAreaView style={styles.screen}>
-      <Header title="AI ด้านสุขภาพ" go={go} goBack={goBack} />
+      <Header title={t('healthAI')} go={go} goBack={goBack} />
       <ScrollView style={styles.chatScroll} contentContainerStyle={styles.chat} keyboardShouldPersistTaps="handled">
         {error ? <Text style={styles.errorBox}>{error}</Text> : null}
         {messages.map((m, i) => (
@@ -642,8 +666,8 @@ function MedicalAI({ go, goBack, onHistory }) {
         <TextInput
           value={msg}
           onChangeText={setMsg}
-          placeholder="พิมพ์ภาษาไทยหรือ English..."
-          accessibilityLabel="ช่องพิมพ์คำถามภาษาไทยหรือภาษาอังกฤษ"
+          placeholder={t('assistantInputPlaceholder')}
+          accessibilityLabel={t('allLanguagesSupported')}
           keyboardType="default"
           autoCapitalize="sentences"
           autoCorrect={true}
@@ -663,6 +687,7 @@ function MedicalAI({ go, goBack, onHistory }) {
 }
 
 function DrugSafety({ go, goBack, onSelectDrug, initialQuery = '', onHistory }) {
+  const { t } = useLocalizedText();
   const [q, setQ] = useState(initialQuery);
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -716,15 +741,15 @@ function DrugSafety({ go, goBack, onSelectDrug, initialQuery = '', onHistory }) 
 
   return (
     <SafeAreaView style={styles.screen}>
-      <Header title="ความปลอดภัยด้านยา" go={go} goBack={goBack} />
+      <Header title={t('drugSafety')} go={go} goBack={goBack} />
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.sectionTitle}>ค้นหายา</Text>
+        <Text style={styles.sectionTitle}>{t('searchDrug')}</Text>
         <View style={styles.search}>
           <Ionicons name="search" size={18} color="#8B9AB2" />
           <TextInput
             value={q}
             onChangeText={setQ}
-            placeholder="พิมพ์ชื่อยา เช่น พาราเซตามอล หรือ paracetamol"
+            placeholder={t('routeSearchPrompt')}
             autoCapitalize="none"
             autoCorrect={false}
             inputMode="text"
@@ -736,21 +761,21 @@ function DrugSafety({ go, goBack, onSelectDrug, initialQuery = '', onHistory }) 
         {loading ? (
           <View style={{ marginTop: 16, alignItems: 'center' }}>
             <ActivityIndicator size="small" color={BLUE} />
-            <Text style={[styles.muted, { marginTop: 8 }]}>กำลังค้นหายา...</Text>
+            <Text style={[styles.muted, { marginTop: 8 }]}>{t('searchLoading')}</Text>
           </View>
         ) : null}
 
         {error ? <Text style={styles.errorBox}>{error}</Text> : null}
 
         {!loading && !error && q.trim() && results.length === 0 ? (
-          <Text style={[styles.muted, { marginTop: 14 }]}>ไม่พบยาที่ตรงกับคำค้นหา</Text>
+          <Text style={[styles.muted, { marginTop: 14 }]}>{t('noDrugFound')}</Text>
         ) : null}
 
         {!loading && !q.trim() ? (
-          <Text style={[styles.muted, { marginTop: 14 }]}>พิมพ์ชื่อยา ชื่อสารสำคัญ หรือรายละเอียดเป็นภาษาไทยได้</Text>
+          <Text style={[styles.muted, { marginTop: 14 }]}>{t('searchHint')}</Text>
         ) : null}
 
-        <Text style={styles.sectionTitle}>ผลการค้นหา</Text>
+        <Text style={styles.sectionTitle}>{t('searchResults')}</Text>
         {results.slice(0, 20).map((drug) => (
           <Pressable
             key={`${drug.drug_name}-${drug.source}`}
@@ -775,8 +800,8 @@ function DrugSafety({ go, goBack, onSelectDrug, initialQuery = '', onHistory }) 
         <View style={styles.safeBox}>
           <Ionicons name="shield-checkmark" size={28} color={GREEN} />
           <View style={{ flex: 1, marginLeft: 12 }}>
-            <Text style={styles.bold}>ตรวจสอบการใช้ยาร่วมกัน</Text>
-            <Text style={styles.muted}>ตรวจสอบการใช้ยาร่วมกันอย่างปลอดภัย</Text>
+            <Text style={styles.bold}>{t('safeDrugCheck')}</Text>
+            <Text style={styles.muted}>{t('safeDrugCheckSubtitle')}</Text>
           </View>
         </View>
       </ScrollView>
@@ -1250,12 +1275,13 @@ function SafeRoute({ go, goBack, onHistory }) {
 }
 
 function Profile({ go, goBack, user, profile, onLogout }) {
-  const displayName = profile?.full_name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'ผู้ใช้งาน';
+  const { t } = useLocalizedText();
+  const displayName = profile?.full_name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || t('user');
   const displayEmail = user?.email || profile?.email || '';
 
   return (
     <SafeAreaView style={styles.screen}>
-      <Header title="โปรไฟล์" go={go} goBack={goBack} />
+      <Header title={t('profile')} go={go} goBack={goBack} />
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.profile}>
           <View style={styles.profileAvatar}><Text style={styles.profileAvatarText}>{displayName.charAt(0).toUpperCase()}</Text></View>
@@ -1264,12 +1290,12 @@ function Profile({ go, goBack, user, profile, onLogout }) {
         </View>
 
         {[
-          ['ข้อมูลส่วนตัว', 'personalInfo', 'person-outline'],
-          ['ประวัติการใช้งาน', 'history', 'time-outline'],
-          ['รายการที่บันทึก', 'saved', 'bookmark-outline'],
-          ['ตั้งค่า', 'settings', 'settings-outline'],
-          ['เกี่ยวกับ MedSafe AI', 'about', 'information-circle-outline'],
-          ...(profile?.role === 'admin' ? [['Admin Dashboard', 'admin', 'speedometer-outline']] : []),
+          [t('profileMenuPersonal'), 'personalInfo', 'person-outline'],
+          [t('profileMenuHistory'), 'history', 'time-outline'],
+          [t('profileMenuSaved'), 'saved', 'bookmark-outline'],
+          [t('profileMenuSettings'), 'settings', 'settings-outline'],
+          [t('profileMenuAbout'), 'about', 'information-circle-outline'],
+          ...(profile?.role === 'admin' ? [[t('adminDashboard'), 'admin', 'speedometer-outline']] : []),
         ].map(([label, target, icon]) => (
           <Pressable key={target} style={styles.menu} onPress={() => go(target)}>
             <Ionicons name="chevron-forward" size={20} color="#8EA0B8" />
@@ -1278,7 +1304,7 @@ function Profile({ go, goBack, user, profile, onLogout }) {
           </Pressable>
         ))}
 
-        <Button title="ออกจากระบบ" secondary onPress={onLogout} />
+        <Button title={t('logout')} secondary onPress={onLogout} />
       </ScrollView>
       <BottomNav active="profile" go={go} />
     </SafeAreaView>
@@ -1286,6 +1312,7 @@ function Profile({ go, goBack, user, profile, onLogout }) {
 }
 
 function PersonalInfo({ go, goBack, user, profile, onSaved }) {
+  const { t } = useLocalizedText();
   const [values, setValues] = useState({ ...profile, email: profile?.email || user?.email || '' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -1302,41 +1329,59 @@ function PersonalInfo({ go, goBack, user, profile, onSaved }) {
     else { onSaved(result.data); Alert.alert('ข้อมูลส่วนตัว', 'บันทึกข้อมูลเรียบร้อยแล้ว'); }
   };
   const fields = [['full_name', 'ชื่อ-นามสกุล'], ['email', 'อีเมล'], ['date_of_birth', 'วันเกิด (YYYY-MM-DD)'], ['gender', 'เพศ'], ['height', 'ส่วนสูง'], ['weight', 'น้ำหนัก'], ['blood_type', 'กรุ๊ปเลือด']];
-  return <SafeAreaView style={styles.screen}><Header title="ข้อมูลส่วนตัว" go={go} goBack={goBack} /><ScrollView contentContainerStyle={styles.content}>
+  return <SafeAreaView style={styles.screen}><Header title={t('personalInfoTitle')} go={go} goBack={goBack} /><ScrollView contentContainerStyle={styles.content}>
     {error ? <Text style={styles.errorBox}>{error}</Text> : null}
     {fields.map(([key, label]) => <View key={key}><Text style={styles.label}>{label}</Text><TextInput style={styles.input} value={values[key] == null ? '' : String(values[key])} onChangeText={(text) => setValue(key, text)} keyboardType={['height', 'weight'].includes(key) ? 'numeric' : 'default'} autoCapitalize={['full_name', 'gender', 'blood_type'].includes(key) ? 'words' : 'none'} autoCorrect={false} inputMode={['height', 'weight'].includes(key) ? 'numeric' : 'text'} /></View>)}
-    <Button title="บันทึกข้อมูล" onPress={save} loading={loading} />
+    <Button title={t('saveProfile')} onPress={save} loading={loading} />
   </ScrollView></SafeAreaView>;
 }
 
 function History({ go, goBack, userId }) {
+  const { t } = useLocalizedText();
   const [items, setItems] = useState([]); const [loading, setLoading] = useState(true); const [refreshing, setRefreshing] = useState(false); const [error, setError] = useState('');
   const load = async (isRefresh = false) => { isRefresh ? setRefreshing(true) : setLoading(true); setError(''); const result = await getUsageHistory(userId); if (result.error) setError(result.error.message || 'ไม่สามารถโหลดประวัติได้'); else setItems(result.data); isRefresh ? setRefreshing(false) : setLoading(false); };
   useEffect(() => { load(); }, [userId]);
-  return <SafeAreaView style={styles.screen}><Header title="ประวัติการใช้งาน" go={go} goBack={goBack} /><ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} />}>
-    {loading ? <ActivityIndicator color={BLUE} /> : error ? <Text style={styles.errorBox}>{error}</Text> : items.length === 0 ? <Text style={styles.empty}>{'ยังไม่มีประวัติการใช้งาน'}</Text> : items.map((item) => <View style={styles.infoBlock} key={item.id}><Text style={styles.cardTitle}>{item.title}</Text><Text style={styles.muted}>{item.description || 'ไม่มีรายละเอียด'}</Text><Text style={styles.muted}>{item.action_type} · {new Date(item.created_at).toLocaleString('th-TH')}</Text></View>)}
+  return <SafeAreaView style={styles.screen}><Header title={t('historyTitle')} go={go} goBack={goBack} /><ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} />}>
+    {loading ? <ActivityIndicator color={BLUE} /> : error ? <Text style={styles.errorBox}>{error}</Text> : items.length === 0 ? <Text style={styles.empty}>{t('noHistory')}</Text> : items.map((item) => <View style={styles.infoBlock} key={item.id}><Text style={styles.cardTitle}>{item.title}</Text><Text style={styles.muted}>{item.description || t('noDescription')}</Text><Text style={styles.muted}>{item.action_type} · {new Date(item.created_at).toLocaleString('th-TH')}</Text></View>)}
   </ScrollView></SafeAreaView>;
 }
 
 function Saved({ go, goBack, userId, onChanged }) {
+  const { t } = useLocalizedText();
   const [items, setItems] = useState([]); const [loading, setLoading] = useState(true); const [error, setError] = useState('');
   const load = async () => { setLoading(true); setError(''); const result = await getSavedItems(userId); if (result.error) setError(result.error.message || 'ไม่สามารถโหลดรายการบันทึกได้'); else setItems(result.data); setLoading(false); };
   useEffect(() => { load(); }, [userId]);
   const remove = async (id) => { const result = await removeSavedItem(userId, id); if (result.error) Alert.alert('ลบรายการ', result.error.message || 'ลบรายการไม่สำเร็จ'); else { setItems((current) => current.filter((item) => item.id !== id)); onChanged?.(); } };
-  return <SafeAreaView style={styles.screen}><Header title="รายการที่บันทึก" go={go} goBack={goBack} /><ScrollView contentContainerStyle={styles.content}>
-    {loading ? <ActivityIndicator color={BLUE} /> : error ? <Text style={styles.errorBox}>{error}</Text> : items.length === 0 ? <Text style={styles.empty}>{'ยังไม่มีรายการที่บันทึก'}</Text> : items.map((item) => <View style={styles.infoBlock} key={item.id}><Text style={styles.cardTitle}>{item.title}</Text><Text style={styles.muted}>{item.description || 'ไม่มีรายละเอียด'}</Text><Text style={styles.muted}>{item.item_type} · {new Date(item.created_at).toLocaleString('th-TH')}</Text><Button title="ลบรายการ" secondary icon="trash-outline" onPress={() => remove(item.id)} /></View>)}
+  return <SafeAreaView style={styles.screen}><Header title={t('savedTitle')} go={go} goBack={goBack} /><ScrollView contentContainerStyle={styles.content}>
+    {loading ? <ActivityIndicator color={BLUE} /> : error ? <Text style={styles.errorBox}>{error}</Text> : items.length === 0 ? <Text style={styles.empty}>{t('noSavedItems')}</Text> : items.map((item) => <View style={styles.infoBlock} key={item.id}><Text style={styles.cardTitle}>{item.title}</Text><Text style={styles.muted}>{item.description || t('noDescription')}</Text><Text style={styles.muted}>{item.item_type} · {new Date(item.created_at).toLocaleString('th-TH')}</Text><Button title={t('removeItem')} secondary icon="trash-outline" onPress={() => remove(item.id)} /></View>)}
   </ScrollView></SafeAreaView>;
 }
 
-function Settings({ go, goBack, userId }) {
+function Settings({ go, goBack, userId, onLanguageChange }) {
+  const { t } = useLocalizedText();
   const [settings, setSettings] = useState(null); const [loading, setLoading] = useState(true); const [error, setError] = useState('');
   useEffect(() => { getUserSettings(userId).then((result) => { if (result.error) setError(result.error.message || 'ไม่สามารถโหลดการตั้งค่าได้'); else setSettings(result.data); setLoading(false); }); }, [userId]);
+  // toggle() จัดการตั้งค่าสถานะการแจ้งเตือนแบบ real-time
+  // เมื่อผู้ใช้กดสวิตช์ ระบบจะอัปเดต state ทันทีก่อนส่งข้อมูลไป Supabase เพื่อให้ UI รู้สึกตอบสนองที่รวดเร็ว
   const toggle = async (value) => { setSettings((current) => ({ ...current, notifications_enabled: value })); const result = await updateUserSettings(userId, { notifications_enabled: value }); if (result.error) { setError(result.error.message || 'บันทึกการตั้งค่าไม่สำเร็จ'); setSettings((current) => ({ ...current, notifications_enabled: !value })); } };
-  return <SafeAreaView style={styles.screen}><Header title="ตั้งค่า" go={go} goBack={goBack} /><ScrollView contentContainerStyle={styles.content}>{loading ? <ActivityIndicator color={BLUE} /> : error ? <Text style={styles.errorBox}>{error}</Text> : <><View style={styles.settingRow}><Text style={styles.cardTitle}>การแจ้งเตือน</Text><Switch value={Boolean(settings?.notifications_enabled)} onValueChange={toggle} trackColor={{ true: '#A9C4FA' }} thumbColor={BLUE} /></View><View style={styles.infoBlock}><Text style={styles.cardTitle}>ภาษา</Text><Text style={styles.muted}>{settings?.language || 'th'}</Text></View></>}</ScrollView></SafeAreaView>;
+  // changeLanguage() ทำหน้าที่สลับภาษาปัจจุบันของแอปและบันทึกลง user_settings
+  // หลังจากอัปเดตค่าแล้ว จะเรียก onLanguageChange() เพื่อให้ App component ปรับ LanguageContext และ render ใหม่ทันที
+  const changeLanguage = async (value) => {
+    const nextLanguage = normalizeLanguage(value);
+    setSettings((current) => ({ ...current, language: nextLanguage }));
+    onLanguageChange?.(nextLanguage);
+    const result = await updateUserSettings(userId, { language: nextLanguage });
+    if (result.error) {
+      setError(result.error.message || 'บันทึกการตั้งค่าไม่สำเร็จ');
+      setSettings((current) => ({ ...current, language: normalizeLanguage(settings?.language) }));
+    }
+  };
+  return <SafeAreaView style={styles.screen}><Header title={t('settings')} go={go} goBack={goBack} /><ScrollView contentContainerStyle={styles.content}>{loading ? <ActivityIndicator color={BLUE} /> : error ? <Text style={styles.errorBox}>{error}</Text> : <><View style={styles.settingRow}><Text style={styles.cardTitle}>{t('notifications')}</Text><Switch value={Boolean(settings?.notifications_enabled)} onValueChange={toggle} trackColor={{ true: '#A9C4FA' }} thumbColor={BLUE} /></View><View style={styles.infoBlock}><Text style={styles.cardTitle}>{t('language')}</Text><View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}><Pressable onPress={() => changeLanguage('th')} style={[styles.button, styles.buttonSecondary, { flex: 1, marginTop: 0 }, settings?.language === 'th' && styles.buttonDisabled]}><Text style={[styles.buttonTextSecondary, settings?.language === 'th' && { color: BLUE }]}>{t('thai')}</Text></Pressable><Pressable onPress={() => changeLanguage('en')} style={[styles.button, styles.buttonSecondary, { flex: 1, marginTop: 0 }, settings?.language === 'en' && styles.buttonDisabled]}><Text style={[styles.buttonTextSecondary, settings?.language === 'en' && { color: BLUE }]}>{t('english')}</Text></Pressable></View></View></>}</ScrollView></SafeAreaView>;
 }
 
 function About({ go, goBack }) {
-  return <SafeAreaView style={styles.screen}><Header title="เกี่ยวกับ MedSafe AI" go={go} goBack={goBack} /><ScrollView contentContainerStyle={styles.content}><Logo /><Text style={styles.heroTitle}>MEDSAFE AI</Text><Text style={styles.centerText}>ผู้ช่วยสุขภาพอัจฉริยะด้วย AI</Text><View style={styles.infoBlock}><Text style={styles.cardTitle}>เวอร์ชัน</Text><Text style={styles.muted}>{appPackage.version}</Text></View><View style={styles.infoBlock}><Text style={styles.cardTitle}>คำอธิบายแอป</Text><Text style={styles.muted}>ช่วยค้นหาข้อมูลยาและสนับสนุนการดูแลสุขภาพจากข้อมูลที่มีแหล่งอ้างอิง</Text></View><View style={styles.infoBlock}><Text style={styles.cardTitle}>แหล่งข้อมูลยา</Text><Text style={styles.muted}>ฐานข้อมูลยาและแหล่งข้อมูลที่จัดเก็บในโปรเจกต์ MEDSAFE AI</Text></View><Text style={styles.errorBox}>AI ไม่ใช่แพทย์ ข้อมูลนี้ไม่ใช่การวินิจฉัยหรือคำแนะนำทางการแพทย์</Text></ScrollView></SafeAreaView>;
+  const { t } = useLocalizedText();
+  return <SafeAreaView style={styles.screen}><Header title={t('about')} go={go} goBack={goBack} /><ScrollView contentContainerStyle={styles.content}><Logo /><Text style={styles.heroTitle}>{t('appName')}</Text><Text style={styles.centerText}>{t('appSubtitle')}</Text><View style={styles.infoBlock}><Text style={styles.cardTitle}>{t('appVersion')}</Text><Text style={styles.muted}>{appPackage.version}</Text></View><View style={styles.infoBlock}><Text style={styles.cardTitle}>{t('appDescription')}</Text><Text style={styles.muted}>{t('appDescriptionText')}</Text></View><View style={styles.infoBlock}><Text style={styles.cardTitle}>{t('drugSources')}</Text><Text style={styles.muted}>{t('drugSourcesText')}</Text></View><Text style={styles.errorBox}>{t('medicalDisclaimer')}</Text></ScrollView></SafeAreaView>;
 }
 
 function Header({ title, go, goBack, backTarget = 'home' }) {

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Platform, View, Text, StyleSheet } from 'react-native';
+import { Platform, View, StyleSheet } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
 
@@ -27,7 +27,7 @@ if (isWeb) {
       'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
   });
 
-  MapView = ({ style, initialRegion, children }) => {
+  const MapViewWeb = ({ style, initialRegion, children }) => {
     const center = initialRegion
       ? [
           initialRegion.latitude,
@@ -52,8 +52,10 @@ if (isWeb) {
       </View>
     );
   };
+  MapView = MapViewWeb;
+  MapView.displayName = 'MapView';
 
-  Marker = ({ coordinate, title }) => {
+  const MarkerWeb = ({ coordinate, title }) => {
     if (!coordinate) return null;
 
     return (
@@ -63,8 +65,10 @@ if (isWeb) {
       />
     );
   };
+  Marker = MarkerWeb;
+  Marker.displayName = 'Marker';
 
-  Polyline = ({ coordinates, ...props }) => {
+  const PolylineWeb = ({ coordinates, ...props }) => {
     if (!coordinates || coordinates.length === 0) return null;
 
     return (
@@ -77,12 +81,18 @@ if (isWeb) {
       />
     );
   };
+  Polyline = PolylineWeb;
+  Polyline.displayName = 'Polyline';
 } else {
   const RNMaps = require('react-native-maps');
 
   MapView = RNMaps.default;
   Marker = RNMaps.Marker;
   Polyline = RNMaps.Polyline;
+
+  if (MapView) MapView.displayName = 'MapView';
+  if (Marker) Marker.displayName = 'Marker';
+  if (Polyline) Polyline.displayName = 'Polyline';
 }
 
 const styles = StyleSheet.create({

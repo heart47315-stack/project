@@ -2,6 +2,11 @@
   "compilerOptions": {},
   "extends": "expo/tsconfig.base",
   "exclude": [
-    "supabase/functions/**/*"
+    "supabase/functions/**/*",
+    "**/*.bundle.js",
+    "**/*.served.js",
+    "src-lib-map-web-safe.js",
+    "map-web-safe.served.js",
+    "AppEntry.bundle.js"
   ]
 }

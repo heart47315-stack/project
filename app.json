@@ -1,12 +1,12 @@
-
 {
   "expo": {
     "name": "MEDSAFE AI",
     "slug": "medsafe-ai",
     "scheme": "medsafeai",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "android": {
-      "versionCode": 25
+      "versionCode": 2,
+      "package": "com.medsafeai.app"
     },
     "runtimeVersion": "1.0.0",
     "web": {

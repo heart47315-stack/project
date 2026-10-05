@@ -6,7 +6,8 @@
     "version": "1.0.1",
     "android": {
       "versionCode": 2,
-      "package": "com.medsafeai.app"
+      "package": "com.medsafeai.app",
+      "permissions": ["SCHEDULE_EXACT_ALARM", "POST_NOTIFICATIONS"]
     },
     "runtimeVersion": "1.0.0",
     "web": {
@@ -23,7 +24,8 @@
     },
     "plugins": [
       "expo-asset",
-      "expo-font"
+      "expo-font",
+      "expo-notifications"
     ]
   }
 }

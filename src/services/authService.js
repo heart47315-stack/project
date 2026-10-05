@@ -1,8 +1,7 @@
 import { supabase } from '../lib/supabase';
 
-export const AUTH_REDIRECT_URL =
-  process.env.EXPO_PUBLIC_AUTH_REDIRECT_URL || 'medsafeai://auth/callback';
 export const AUTH_REDIRECT_SCHEME = 'medsafeai://auth/callback';
+export const AUTH_REDIRECT_URL = AUTH_REDIRECT_SCHEME;
 
 const normalizeEmail = (value = '') => value.trim().toLowerCase();
 const genericError = 'เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง';
@@ -144,6 +143,23 @@ export async function loginUser({ email, password }) {
     password,
   });
 
+  return error ? { error: getFriendlyAuthError(error) } : { data };
+}
+
+export async function requestEmailOtp(email) {
+  const trimmedEmail = normalizeEmail(email);
+  if (!trimmedEmail) return { error: { message: 'กรุณากรอกอีเมล' } };
+  const { data, error } = await supabase.auth.signInWithOtp({ email: trimmedEmail, options: { shouldCreateUser: false, emailRedirectTo: AUTH_REDIRECT_URL } });
+  return error ? { error: getFriendlyAuthError(error) } : { data };
+}
+
+export async function verifyEmailOtp(email, token) {
+  const trimmedEmail = normalizeEmail(email);
+  if (!trimmedEmail || !/^\d{6}$/.test(String(token || ''))) return { error: { message: 'กรุณากรอก OTP 6 หลัก' } };
+  const { data, error } = await supabase.auth.verifyOtp({ email: trimmedEmail, token: String(token), type: 'email' });
+  if (error && /expired|otp_expired/i.test(error.message || '')) {
+    return { error: { code: 'otp_expired', message: error.message } };
+  }
   return error ? { error: getFriendlyAuthError(error) } : { data };
 }
 

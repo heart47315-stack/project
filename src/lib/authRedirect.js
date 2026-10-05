@@ -1,5 +1,5 @@
 export function parseAuthUrl(url) {
-  const result = { code: null, type: null, accessToken: null, refreshToken: null };
+  const result = { code: null, type: null, accessToken: null, refreshToken: null, tokenHash: null };
   if (!url) return result;
 
   const queryIndex = url.indexOf('?');
@@ -30,5 +30,6 @@ export function parseAuthUrl(url) {
   result.type = query.type || hash.type || null;
   result.accessToken = hash.access_token || query.access_token || null;
   result.refreshToken = hash.refresh_token || query.refresh_token || null;
+  result.tokenHash = query.token_hash || hash.token_hash || null;
   return result;
 }

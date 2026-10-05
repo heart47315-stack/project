@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef, useContext } from 'react';
+import React, { useState, useEffect, useRef, useContext, useCallback } from 'react';
 import * as Updates from 'expo-updates';
 import { DEFAULT_LANGUAGE, getLanguageText, normalizeLanguage } from './src/utils/i18n';
 import {
@@ -27,6 +27,8 @@ import {
   getCurrentUser,
   requestPasswordReset,
   updatePassword,
+  requestEmailOtp,
+  verifyEmailOtp,
 } from './src/services/authService';
 import { searchDrugs } from './src/services/drugService';
 import { sendMedicalQuestion } from './src/services/medicalAiService';
@@ -38,6 +40,9 @@ import { getAdminDashboard } from './src/services/adminService';
 import { searchHospitals, getNearbyHospitals } from './src/services/hospitalService';
 import { evaluateRouteRisk, fetchRouteBetween } from './src/services/safeRouteService';
 import { parseAuthUrl } from './src/lib/authRedirect';
+import * as Notifications from 'expo-notifications';
+import { getReminders, saveReminder, deleteReminder } from './src/services/reminderService';
+import HealthTasksScreen from './src/screens/HealthTasksScreen';
 import {
   resolveBackTarget,
   pushScreenHistory,
@@ -47,6 +52,8 @@ import {
   canAccessAdminScreen,
 } from './src/utils/navigation';
 import appPackage from './package.json';
+
+Notifications.setNotificationHandler({ handleNotification: async () => ({ shouldShowBanner: true, shouldShowList: true, shouldPlaySound: true, shouldSetBadge: false }) });
 
 const BLUE = '#2F6FED';
 const DARK = '#18365F';
@@ -72,7 +79,7 @@ function Logo({ small = false }) {
   return (
     <View style={styles.logoRow}>
       <View style={[styles.logoBox, small && styles.logoSmall]}>
-        <Ionicons name="add" size={small ? 22 : 34} color={BLUE} />
+        <MaterialCommunityIcons name="shield-plus" size={small ? 25 : 38} color={BLUE} />
         <View style={styles.logoAI}><Text style={[styles.logoAITxt, small && { fontSize: 8 }]}>AI</Text></View>
       </View>
       {!small && (
@@ -163,7 +170,7 @@ function Login({ go, onSubmit, onForgot }) {
     try {
       const result = await onSubmit({ email, password });
       if (result?.error) {
-        setError(result.error.message || 'เข้าสู่ระบบไม่สำเร็จ กรุณาลองใหม่');
+        setError(t('loginFailed'));
       }
     } finally {
       setLoading(false);
@@ -207,6 +214,7 @@ function Login({ go, onSubmit, onForgot }) {
 
         <Pressable style={styles.forgot} onPress={() => onForgot(email)}><Text style={styles.link}>{t('forgotPassword')}</Text></Pressable>
         <Button title={t('login')} onPress={handleSubmit} loading={loading} />
+        <Button title={t('loginWithOtp')} secondary onPress={() => go('otpLogin')} />
         <Text style={styles.or}>{t('or')}</Text>
         <Text style={[styles.muted, { textAlign: 'center', marginTop: 14 }]}>{t('googleInfo')}</Text>
         <Pressable onPress={() => go('register')}>
@@ -215,6 +223,14 @@ function Login({ go, onSubmit, onForgot }) {
       </View>
     </SafeAreaView>
   );
+}
+
+function OtpLogin({ go, onVerified }) {
+  const { t } = useLocalizedText();
+  const [email, setEmail] = useState(''); const [otp, setOtp] = useState(''); const [busy, setBusy] = useState(false); const [message, setMessage] = useState(''); const [error, setError] = useState('');
+  const send = async () => { setBusy(true); setError(''); setMessage(''); try { const result = await requestEmailOtp(email); if (result.error) setError(result.error.message); else setMessage(t('otpSent')); } finally { setBusy(false); } };
+  const verify = async () => { setBusy(true); setError(''); try { const result = await verifyEmailOtp(email, otp); if (result.error) setError(result.error.code === 'otp_expired' ? t('otpExpired') : t('otpFailed')); else await onVerified(result.data); } finally { setBusy(false); } };
+  return <SafeAreaView style={styles.screen}><ScrollView contentContainerStyle={styles.auth}><Header title={t('otpLogin')} go={go} backTarget="login" /><Text style={styles.label}>{t('email')}</Text><TextInput style={styles.input} keyboardType="email-address" autoCapitalize="none" value={email} onChangeText={setEmail} /><Text style={styles.label}>{t('otpCode')}</Text><TextInput style={styles.input} keyboardType="number-pad" maxLength={6} value={otp} onChangeText={setOtp} />{error ? <Text style={styles.errorBox}>{error}</Text> : null}{message ? <Text style={styles.successBox}>{message}</Text> : null}<Button title={t('sendOtp')} onPress={send} loading={busy} /><Button title={t('verifyOtp')} secondary onPress={verify} loading={busy} /><Button title={t('resendOtp')} secondary onPress={send} loading={busy} /></ScrollView></SafeAreaView>;
 }
 
 function Register({ go, onSubmit }) {
@@ -243,7 +259,7 @@ function Register({ go, onSubmit }) {
       return;
     }
     if (password !== confirmPassword) {
-      setError('ยืนยันรหัสผ่านไม่ตรงกัน');
+      setError(t('passwordMismatch'));
       return;
     }
     if (height && Number.isNaN(Number(height))) {
@@ -273,7 +289,7 @@ function Register({ go, onSubmit }) {
         bloodType,
       });
       if (result?.error) {
-        setError(result.error.message || 'สมัครสมาชิกไม่สำเร็จ กรุณาลองใหม่');
+        setError(t('registrationFailed'));
       }
 
       if (result?.needsEmailConfirmation) {
@@ -411,7 +427,7 @@ function ForgotPassword({ go, onSubmit }) {
     setMessage('');
     setError('');
     if (!email.trim()) {
-      setError('กรุณากรอกอีเมล');
+      setError(t('emailRequired'));
       return;
     }
 
@@ -419,12 +435,10 @@ function ForgotPassword({ go, onSubmit }) {
     try {
       const result = await onSubmit(email);
       if (result?.error) {
-        setError(result.error.message || 'ไม่สามารถส่งอีเมลได้');
+        setError(t('emailSendFailed'));
         return;
       }
-      setMessage(
-        `ส่งลิงก์เปลี่ยนรหัสผ่านไปที่ ${email.trim().toLowerCase()} แล้ว\nกรุณาเปิดอีเมลและกดลิงก์ ระบบจะเปิดแอปเพื่อให้ตั้งรหัสผ่านใหม่`
-      );
+      setMessage(t('resetEmailSent').replace('{email}', email.trim().toLowerCase()));
     } finally {
       setLoading(false);
     }
@@ -482,15 +496,15 @@ function ResetPassword({ go, onSubmit }) {
     setError('');
 
     if (!password || !confirmPassword) {
-      setError('กรุณากรอกรหัสผ่านใหม่ให้ครบถ้วน');
+      setError(t('newPasswordRequired'));
       return;
     }
     if (password.length < 8) {
-      setError('รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร');
+      setError(t('passwordMinLength'));
       return;
     }
     if (password !== confirmPassword) {
-      setError('ยืนยันรหัสผ่านไม่ตรงกัน');
+      setError(t('passwordMismatch'));
       return;
     }
 
@@ -498,10 +512,10 @@ function ResetPassword({ go, onSubmit }) {
     try {
       const result = await onSubmit(password);
       if (result?.error) {
-        setError(result.error.message || 'เปลี่ยนรหัสผ่านไม่สำเร็จ');
+        setError(t('passwordUpdateFailed'));
         return;
       }
-      Alert.alert('เปลี่ยนรหัสผ่านสำเร็จ', 'รหัสผ่านใหม่ถูกบันทึกใน Supabase แล้ว', [
+      Alert.alert(t('passwordUpdatedTitle'), t('passwordUpdatedBody'), [
         { text: 'เข้าสู่ระบบ', onPress: () => go('login') },
       ]);
     } finally {
@@ -546,6 +560,7 @@ function Home({ go, goBack, user, profile, onSearch, onReturnToAdmin, isAdminUse
     [t('healthAI'), 'ถามคำถามทางการแพทย์', 'meditation', 'chat'],
     [t('drugSafety'), 'ตรวจสอบข้อมูลยาและความปลอดภัย', 'pill', 'drugs'],
     [t('routeSafety'), 'วิเคราะห์เส้นทางที่ปลอดภัย', 'map-marker-path', 'route'],
+    [t('healthTasks'), t('healthTasksHint'), 'clipboard-check-outline', 'healthTasks'],
   ];
   const displayName = profile?.full_name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || t('user');
 
@@ -1290,6 +1305,7 @@ function Profile({ go, goBack, user, profile, onLogout }) {
         </View>
 
         {[
+          [t('healthTasks'), 'healthTasks', 'clipboard-list-outline'],
           [t('profileMenuPersonal'), 'personalInfo', 'person-outline'],
           [t('profileMenuHistory'), 'history', 'time-outline'],
           [t('profileMenuSaved'), 'saved', 'bookmark-outline'],
@@ -1374,9 +1390,21 @@ function Settings({ go, goBack, userId, onLanguageChange }) {
     if (result.error) {
       setError(result.error.message || 'บันทึกการตั้งค่าไม่สำเร็จ');
       setSettings((current) => ({ ...current, language: normalizeLanguage(settings?.language) }));
+      onLanguageChange?.(normalizeLanguage(settings?.language));
     }
   };
-  return <SafeAreaView style={styles.screen}><Header title={t('settings')} go={go} goBack={goBack} /><ScrollView contentContainerStyle={styles.content}>{loading ? <ActivityIndicator color={BLUE} /> : error ? <Text style={styles.errorBox}>{error}</Text> : <><View style={styles.settingRow}><Text style={styles.cardTitle}>{t('notifications')}</Text><Switch value={Boolean(settings?.notifications_enabled)} onValueChange={toggle} trackColor={{ true: '#A9C4FA' }} thumbColor={BLUE} /></View><View style={styles.infoBlock}><Text style={styles.cardTitle}>{t('language')}</Text><View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}><Pressable onPress={() => changeLanguage('th')} style={[styles.button, styles.buttonSecondary, { flex: 1, marginTop: 0 }, settings?.language === 'th' && styles.buttonDisabled]}><Text style={[styles.buttonTextSecondary, settings?.language === 'th' && { color: BLUE }]}>{t('thai')}</Text></Pressable><Pressable onPress={() => changeLanguage('en')} style={[styles.button, styles.buttonSecondary, { flex: 1, marginTop: 0 }, settings?.language === 'en' && styles.buttonDisabled]}><Text style={[styles.buttonTextSecondary, settings?.language === 'en' && { color: BLUE }]}>{t('english')}</Text></Pressable></View></View></>}</ScrollView></SafeAreaView>;
+  return <SafeAreaView style={styles.screen}><Header title={t('settings')} go={go} goBack={goBack} /><ScrollView contentContainerStyle={styles.content}>{loading ? <ActivityIndicator color={BLUE} /> : error ? <Text style={styles.errorBox}>{error}</Text> : <><View style={styles.settingRow}><Text style={styles.cardTitle}>{t('notifications')}</Text><Switch value={Boolean(settings?.notifications_enabled)} onValueChange={toggle} trackColor={{ true: '#A9C4FA' }} thumbColor={BLUE} /></View><Pressable style={styles.infoBlock} onPress={() => go('reminders')}><Text style={styles.cardTitle}>{t('reminders')}</Text></Pressable><View style={styles.infoBlock}><Text style={styles.cardTitle}>{t('language')}</Text><View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}><Pressable onPress={() => changeLanguage('th')} style={[styles.button, styles.buttonSecondary, { flex: 1, marginTop: 0 }, settings?.language === 'th' && styles.buttonDisabled]}><Text style={[styles.buttonTextSecondary, settings?.language === 'th' && { color: BLUE }]}>{t('thai')}</Text></Pressable><Pressable onPress={() => changeLanguage('en')} style={[styles.button, styles.buttonSecondary, { flex: 1, marginTop: 0 }, settings?.language === 'en' && styles.buttonDisabled]}><Text style={[styles.buttonTextSecondary, settings?.language === 'en' && { color: BLUE }]}>{t('english')}</Text></Pressable></View></View><Pressable style={styles.infoBlock} onPress={() => go('about')}><Text style={styles.cardTitle}>{t('about')}</Text></Pressable></>}</ScrollView></SafeAreaView>;
+}
+
+function Reminders({ go, goBack, userId }) {
+  const { t } = useLocalizedText(); const [items, setItems] = useState([]); const [title, setTitle] = useState(''); const [date, setDate] = useState(new Date().toISOString().slice(0,10)); const [time, setTime] = useState('09:00'); const [type, setType] = useState('medication'); const [repeat, setRepeat] = useState('none'); const [editing, setEditing] = useState(null); const [error, setError] = useState('');
+  const load = useCallback(async () => { const r = await getReminders(userId); if (r.error) setError(r.error.message); else setItems(r.data || []); }, [userId]);
+  useEffect(() => { load(); }, [load]);
+  const create = async () => { setError(''); if (!title.trim()) { setError(t('reminderTitleRequired')); return; } const permission = await Notifications.requestPermissionsAsync(); if (!permission.granted) { setError(t('notificationPermission')); return; } const when = new Date(`${date}T${time}:00`); if (Number.isNaN(when.getTime()) || (repeat === 'none' && when <= new Date())) { setError(t('reminderTimeInvalid')); return; } if (editing?.notification_id) await Notifications.cancelScheduledNotificationAsync(editing.notification_id); const trigger = repeat === 'daily' ? { type: Notifications.SchedulableTriggerInputTypes.DAILY, hour: when.getHours(), minute: when.getMinutes() } : repeat === 'weekly' ? { type: Notifications.SchedulableTriggerInputTypes.WEEKLY, weekday: when.getDay() || 7, hour: when.getHours(), minute: when.getMinutes() } : repeat === 'monthly' ? { type: Notifications.SchedulableTriggerInputTypes.MONTHLY, day: when.getDate(), hour: when.getHours(), minute: when.getMinutes() } : { type: Notifications.SchedulableTriggerInputTypes.DATE, date: when }; const notificationId = await Notifications.scheduleNotificationAsync({ content: { title: title.trim(), body: t('reminderNotice'), channelId: 'reminders' }, trigger }); const result = await saveReminder(userId, { ...(editing || {}), title: title.trim(), reminder_type: type, reminder_date: date, reminder_time: time, repeat_type: repeat, repeat_days: repeat === 'weekly' ? [when.getDay() || 7] : [], enabled: true, notification_id: notificationId, metadata: editing?.metadata || {} }); if (result.error) { await Notifications.cancelScheduledNotificationAsync(notificationId); setError(result.error.message); } else { setTitle(''); setEditing(null); await load(); } };
+  const toggle = async (item) => { if (item.notification_id) await Notifications.cancelScheduledNotificationAsync(item.notification_id); let notification_id = null; if (!item.enabled) { const dt = new Date(`${item.reminder_date}T${item.reminder_time}`); const trigger = item.repeat_type === 'daily' ? { type: Notifications.SchedulableTriggerInputTypes.DAILY, hour: dt.getHours(), minute: dt.getMinutes() } : item.repeat_type === 'weekly' ? { type: Notifications.SchedulableTriggerInputTypes.WEEKLY, weekday: dt.getDay() || 7, hour: dt.getHours(), minute: dt.getMinutes() } : item.repeat_type === 'monthly' ? { type: Notifications.SchedulableTriggerInputTypes.MONTHLY, day: dt.getDate(), hour: dt.getHours(), minute: dt.getMinutes() } : { type: Notifications.SchedulableTriggerInputTypes.DATE, date: dt }; notification_id = await Notifications.scheduleNotificationAsync({ content: { title: item.title, body: t('reminderNotice'), channelId: 'reminders' }, trigger }); } const r = await saveReminder(userId, { ...item, enabled: !item.enabled, notification_id }); if (r.error) setError(r.error.message); else load(); };
+  const edit = (item) => { setEditing(item); setTitle(item.title); setDate(item.reminder_date); setTime(String(item.reminder_time).slice(0,5)); setType(item.reminder_type); setRepeat(item.repeat_type); };
+  const remove = async (item) => { if (item.notification_id) await Notifications.cancelScheduledNotificationAsync(item.notification_id); const r = await deleteReminder(userId, item.id); if (r.error) setError(r.error.message); else load(); };
+  return <SafeAreaView style={styles.screen}><Header title={t('reminders')} go={go} goBack={goBack} /><ScrollView contentContainerStyle={styles.content}>{error ? <Text style={styles.errorBox}>{error}</Text> : null}<TextInput style={styles.input} placeholder={t('reminderTitle')} value={title} onChangeText={setTitle}/><TextInput style={styles.input} placeholder="YYYY-MM-DD" value={date} onChangeText={setDate}/><TextInput style={styles.input} placeholder="HH:mm" value={time} onChangeText={setTime}/><View style={{flexDirection:'row',gap:6}}>{['medication','appointment','general'].map((v)=><Pressable key={v} onPress={()=>setType(v)}><Text style={styles.link}>{t(v)}{type===v?' ✓':''}</Text></Pressable>)}</View><View style={{flexDirection:'row',gap:6}}>{['none','daily','weekly','monthly'].map((v)=><Pressable key={v} onPress={()=>setRepeat(v)}><Text style={styles.link}>{t(v)}{repeat===v?' ✓':''}</Text></Pressable>)}</View><Button title={editing ? t('saveReminder') : t('addReminder')} onPress={create}/>{items.map((item)=><View style={styles.infoBlock} key={item.id}><Text style={styles.cardTitle}>{item.title}</Text><Text style={styles.muted}>{item.reminder_date} {item.reminder_time} · {t(item.reminder_type)} · {t(item.repeat_type)}</Text><View style={{flexDirection:'row',gap:8}}><Switch value={item.enabled} onValueChange={()=>toggle(item)}/><Pressable onPress={()=>edit(item)}><Text style={styles.link}>{t('editReminder')}</Text></Pressable><Pressable onPress={()=>remove(item)}><Text style={styles.link}>{t('removeItem')}</Text></Pressable></View></View>)}</ScrollView></SafeAreaView>;
 }
 
 function About({ go, goBack }) {
@@ -1477,6 +1505,15 @@ function AdminDashboard({ go, goBack, profile, onLogout, onUseUserMode }) {
 }
 
 export default function App() {
+  const [language, setLanguage] = useState(DEFAULT_LANGUAGE);
+  const languageRef = useRef(language);
+  languageRef.current = language;
+  useEffect(() => {
+    Notifications.setNotificationChannelAsync('reminders', {
+      name: 'Reminders',
+      importance: Notifications.AndroidImportance.DEFAULT,
+    }).catch((error) => console.warn('Notification channel setup failed:', error));
+  }, []);
   useEffect(() => {
     const checkForUpdates = async () => {
       try {
@@ -1506,17 +1543,17 @@ export default function App() {
   const [adminUserMode, setAdminUserMode] = useState(false);
   const [history, setHistory] = useState([]);
   const [savedItems, setSavedItems] = useState([]);
-  const [settings, setSettings] = useState(null);
   const [selectedDrug, setSelectedDrug] = useState(null);
   const [drugQuery, setDrugQuery] = useState('');
   const pendingRecoveryRef = useRef(false);
+  const pendingConfirmationRef = useRef(false);
+  const processedAuthUrlsRef = useRef(new Set());
 
   const resetAuthState = () => {
     setUser(null);
     setProfile(null);
     setHistory([]);
     setSavedItems([]);
-    setSettings(null);
     setAdminUserMode(false);
     setScreen('login');
     setScreenHistory(resetAuthHistory());
@@ -1568,7 +1605,7 @@ export default function App() {
     if (historyResult.error) console.warn('getUsageHistory error:', historyResult.error.message);
     if (savedResult.error) console.warn('getSavedItems error:', savedResult.error.message);
     setProfile(profileResult.data);
-    setSettings(settingsResult.data);
+    setLanguage(normalizeLanguage(settingsResult.data?.language));
     setHistory(historyResult.data || []);
     setSavedItems(savedResult.data || []);
     return profileResult.data;
@@ -1699,6 +1736,7 @@ export default function App() {
 
     // เซสชันกู้คืนรหัสผ่านมีอายุสั้นและไม่ควรทิ้งให้ผู้ใช้ติดอยู่
     // บนหน้าล้างรหัสผ่านหลังจากอัปเดตสำเร็จ
+    pendingRecoveryRef.current = false;
     await supabase.auth.signOut();
     resetAuthState();
     return response;
@@ -1721,16 +1759,23 @@ export default function App() {
     let mounted = true;
 
     const handleAuthUrl = async (url) => {
+      if (processedAuthUrlsRef.current.has(url)) return;
+      processedAuthUrlsRef.current.add(url);
       const auth = parseAuthUrl(url);
-      if (!auth.code && !auth.accessToken) return;
+      if (!auth.code && !auth.accessToken && !auth.tokenHash) return;
 
       const isRecovery = auth.type === 'recovery';
+      const isConfirmation = auth.type === 'signup' || auth.type === 'email';
       if (isRecovery) pendingRecoveryRef.current = true;
+      if (isConfirmation) pendingConfirmationRef.current = true;
 
       let error = null;
 
       if (auth.code) {
         const result = await supabase.auth.exchangeCodeForSession(auth.code);
+        error = result.error;
+      } else if (auth.tokenHash) {
+        const result = await supabase.auth.verifyOtp({ token_hash: auth.tokenHash, type: auth.type });
         error = result.error;
       } else if (auth.accessToken && auth.refreshToken) {
         const result = await supabase.auth.setSession({
@@ -1744,9 +1789,10 @@ export default function App() {
 
       if (error) {
         pendingRecoveryRef.current = false;
+        pendingConfirmationRef.current = false;
         Alert.alert(
-          isRecovery ? 'ลิงก์เปลี่ยนรหัสผ่านหมดอายุ' : 'ยืนยันอีเมลไม่สำเร็จ',
-          'กรุณาขอลิงก์ใหม่แล้วลองอีกครั้ง'
+          getLanguageText(languageRef.current, isRecovery ? 'authLinkExpired' : 'authLinkFailed'),
+          getLanguageText(languageRef.current, 'authLinkRetry')
         );
         go('login');
         return;
@@ -1754,6 +1800,11 @@ export default function App() {
 
       if (isRecovery) {
         go('resetPassword');
+      } else if (isConfirmation && pendingConfirmationRef.current) {
+        pendingConfirmationRef.current = false;
+        await supabase.auth.signOut();
+        resetAuthState();
+        Alert.alert(getLanguageText(languageRef.current, 'emailConfirmed'), getLanguageText(languageRef.current, 'emailConfirmedBody'));
       }
     };
 
@@ -1765,7 +1816,12 @@ export default function App() {
       const { data } = await getCurrentUser();
       if (!mounted) return;
 
-      if (data) {
+      if (data && pendingRecoveryRef.current) {
+        setUser(data);
+        await loadUserData(data);
+        setScreen('resetPassword');
+        setScreenHistory(['login', 'resetPassword']);
+      } else if (data && !pendingConfirmationRef.current) {
         setUser(data);
         const loadedProfile = await loadUserData(data);
         if (!pendingRecoveryRef.current) routeAfterAuth(loadedProfile?.role);
@@ -1794,6 +1850,7 @@ export default function App() {
         go('resetPassword');
         return;
       }
+      if (pendingConfirmationRef.current) { pendingConfirmationRef.current = false; await supabase.auth.signOut(); resetAuthState(); Alert.alert(getLanguageText(languageRef.current, 'emailConfirmed'), getLanguageText(languageRef.current, 'emailConfirmedBody')); setAuthLoading(false); return; }
 
       if (!session?.user) {
         resetAuthState();
@@ -1856,15 +1913,18 @@ export default function App() {
     personalInfo: <PersonalInfo go={go} goBack={goBack} user={user} profile={profile} onSaved={setProfile} />,
     history: <History go={go} goBack={goBack} userId={user?.id} />,
     saved: <Saved go={go} goBack={goBack} userId={user?.id} onChanged={async () => { const result = await getSavedItems(user?.id); if (!result.error) setSavedItems(result.data); }} />,
-    settings: <Settings go={go} goBack={goBack} userId={user?.id} />,
+    settings: <Settings go={go} goBack={goBack} userId={user?.id} onLanguageChange={setLanguage} />,
+    reminders: <Reminders go={go} goBack={goBack} userId={user?.id} />,
+    healthTasks: <HealthTasksScreen userId={user?.id} language={language} onBack={goBack} />,
+    otpLogin: <OtpLogin go={go} onVerified={async (data) => { const currentUser = data?.user; if (!currentUser) return; setUser(currentUser); const loaded = await loadUserData(currentUser); routeAfterAuth(loaded?.role); }} />,
     about: <About go={go} goBack={goBack} />,
   };
 
   return (
-    <>
+    <LanguageContext.Provider value={language}>
       <StatusBar barStyle="dark-content" backgroundColor="#F8FBFF" />
       {screens[screen]}
-    </>
+    </LanguageContext.Provider>
   );
 }
 

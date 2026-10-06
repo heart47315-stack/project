@@ -3,11 +3,14 @@
     "name": "MEDSAFE AI",
     "slug": "medsafe-ai",
     "scheme": "medsafeai",
-    "version": "1.0.1",
+    "version": "1.1.0",
     "android": {
-      "versionCode": 2,
+      "versionCode": 3,
       "package": "com.medsafeai.app",
-      "permissions": ["SCHEDULE_EXACT_ALARM", "POST_NOTIFICATIONS"]
+      "permissions": [
+        "SCHEDULE_EXACT_ALARM",
+        "POST_NOTIFICATIONS"
+      ]
     },
     "runtimeVersion": "1.0.0",
     "web": {

@@ -1,4 +1,3 @@
-
 {
   "cli": {
     "version": ">= 22.0.0",
@@ -23,8 +22,15 @@
       }
     },
     "production": {
+      "distribution": "store",
       "autoIncrement": false,
-      "channel": "production"
+      "channel": "production",
+      "environment": "production",
+      "env": {
+        "EXPO_USE_COMMUNITY_AUTOLINKING": "1",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://ymhlnsfgutmfczsezpnk.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_kzS0XLT9bhyHuttghJaNMg__6uXtYju"
+      }
     }
   },
   "submit": {

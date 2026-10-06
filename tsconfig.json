@@ -3,6 +3,7 @@
   "extends": "expo/tsconfig.base",
   "exclude": [
     "supabase/functions/**/*",
+    "eas-inspect/**/*",
     "**/*.bundle.js",
     "**/*.served.js",
     "src-lib-map-web-safe.js",

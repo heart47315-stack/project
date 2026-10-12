@@ -1,6 +1,11 @@
 import { searchHospitals } from '../src/services/hospitalService';
 import { evaluateRouteRisk } from '../src/services/safeRouteService';
 
+jest.mock('../src/lib/supabase', () => ({
+  supabase: null,
+  supabaseConfig: { configured: false },
+}));
+
 describe('hospital fallback service', () => {
   it('returns local sample hospital data when Supabase is not configured', async () => {
     const result = await searchHospitals('โรงพยาบาล');

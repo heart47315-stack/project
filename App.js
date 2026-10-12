@@ -29,6 +29,7 @@ import {
   updatePassword,
   requestEmailOtp,
   verifyEmailOtp,
+  getAuthErrorMessage,
 } from './src/services/authService';
 import { searchDrugs } from './src/services/drugService';
 import { sendMedicalQuestion } from './src/services/medicalAiService';
@@ -170,7 +171,7 @@ function Login({ go, onSubmit, onForgot }) {
     try {
       const result = await onSubmit({ email, password });
       if (result?.error) {
-        setError(t('loginFailed'));
+        setError(result.error.message || t('loginFailed'));
       }
     } finally {
       setLoading(false);
@@ -228,8 +229,29 @@ function Login({ go, onSubmit, onForgot }) {
 function OtpLogin({ go, onVerified }) {
   const { t } = useLocalizedText();
   const [email, setEmail] = useState(''); const [otp, setOtp] = useState(''); const [busy, setBusy] = useState(false); const [message, setMessage] = useState(''); const [error, setError] = useState('');
-  const send = async () => { setBusy(true); setError(''); setMessage(''); try { const result = await requestEmailOtp(email); if (result.error) setError(result.error.message); else setMessage(t('otpSent')); } finally { setBusy(false); } };
-  const verify = async () => { setBusy(true); setError(''); try { const result = await verifyEmailOtp(email, otp); if (result.error) setError(result.error.code === 'otp_expired' ? t('otpExpired') : t('otpFailed')); else await onVerified(result.data); } finally { setBusy(false); } };
+  const send = async () => {
+    setBusy(true);
+    setError('');
+    setMessage('');
+    try {
+      const result = await requestEmailOtp(email);
+      if (result.error) setError(result.error.message);
+      else setMessage(t('otpSent'));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const verify = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      const result = await verifyEmailOtp(email, otp);
+      if (result.error) setError(result.error.message);
+      else await onVerified(result.data);
+    } finally {
+      setBusy(false);
+    }
+  };
   return <SafeAreaView style={styles.screen}><ScrollView contentContainerStyle={styles.auth}><Header title={t('otpLogin')} go={go} backTarget="login" /><Text style={styles.label}>{t('email')}</Text><TextInput style={styles.input} keyboardType="email-address" autoCapitalize="none" value={email} onChangeText={setEmail} /><Text style={styles.label}>{t('otpCode')}</Text><TextInput style={styles.input} keyboardType="number-pad" maxLength={6} value={otp} onChangeText={setOtp} />{error ? <Text style={styles.errorBox}>{error}</Text> : null}{message ? <Text style={styles.successBox}>{message}</Text> : null}<Button title={t('sendOtp')} onPress={send} loading={busy} /><Button title={t('verifyOtp')} secondary onPress={verify} loading={busy} /><Button title={t('resendOtp')} secondary onPress={send} loading={busy} /></ScrollView></SafeAreaView>;
 }
 
@@ -289,7 +311,7 @@ function Register({ go, onSubmit }) {
         bloodType,
       });
       if (result?.error) {
-        setError(t('registrationFailed'));
+        setError(result.error.message || t('registrationFailed'));
       }
 
       if (result?.needsEmailConfirmation) {
@@ -435,7 +457,7 @@ function ForgotPassword({ go, onSubmit }) {
     try {
       const result = await onSubmit(email);
       if (result?.error) {
-        setError(t('emailSendFailed'));
+        setError(result.error.message || t('emailSendFailed'));
         return;
       }
       setMessage(t('resetEmailSent').replace('{email}', email.trim().toLowerCase()));
@@ -512,7 +534,7 @@ function ResetPassword({ go, onSubmit }) {
     try {
       const result = await onSubmit(password);
       if (result?.error) {
-        setError(t('passwordUpdateFailed'));
+        setError(result.error.message || t('passwordUpdateFailed'));
         return;
       }
       Alert.alert(t('passwordUpdatedTitle'), t('passwordUpdatedBody'), [
@@ -1737,7 +1759,14 @@ export default function App() {
     // เซสชันกู้คืนรหัสผ่านมีอายุสั้นและไม่ควรทิ้งให้ผู้ใช้ติดอยู่
     // บนหน้าล้างรหัสผ่านหลังจากอัปเดตสำเร็จ
     pendingRecoveryRef.current = false;
-    await supabase.auth.signOut();
+    const logoutResponse = await logoutUser();
+    if (logoutResponse.error) {
+      return {
+        error: {
+          message: `เปลี่ยนรหัสผ่านแล้ว แต่ล้างเซสชันไม่สำเร็จ: ${logoutResponse.error.message}`,
+        },
+      };
+    }
     resetAuthState();
     return response;
   };
@@ -1745,7 +1774,7 @@ export default function App() {
   const handleLogout = async () => {
     const response = await logoutUser();
     if (response.error) {
-      console.warn(response.error.message);
+      Alert.alert('ออกจากระบบไม่สำเร็จ', response.error.message);
       return;
     }
 
@@ -1759,10 +1788,21 @@ export default function App() {
     let mounted = true;
 
     const handleAuthUrl = async (url) => {
-      if (processedAuthUrlsRef.current.has(url)) return;
-      processedAuthUrlsRef.current.add(url);
       const auth = parseAuthUrl(url);
-      if (!auth.code && !auth.accessToken && !auth.tokenHash) return;
+      if (processedAuthUrlsRef.current.has(url)) return;
+      if (!auth.code && !auth.accessToken && !auth.tokenHash && !auth.error && !auth.errorCode) return;
+      processedAuthUrlsRef.current.add(url);
+
+      if (auth.error || auth.errorCode) {
+        Alert.alert(
+          getLanguageText(languageRef.current, 'authLinkFailed'),
+          getAuthErrorMessage({
+            message: auth.errorDescription || auth.errorCode || auth.error,
+            code: auth.errorCode,
+          })
+        );
+        return;
+      }
 
       const isRecovery = auth.type === 'recovery';
       const isConfirmation = auth.type === 'signup' || auth.type === 'email';
@@ -1771,18 +1811,24 @@ export default function App() {
 
       let error = null;
 
-      if (auth.code) {
-        const result = await supabase.auth.exchangeCodeForSession(auth.code);
-        error = result.error;
-      } else if (auth.tokenHash) {
-        const result = await supabase.auth.verifyOtp({ token_hash: auth.tokenHash, type: auth.type });
-        error = result.error;
-      } else if (auth.accessToken && auth.refreshToken) {
-        const result = await supabase.auth.setSession({
-          access_token: auth.accessToken,
-          refresh_token: auth.refreshToken,
-        });
-        error = result.error;
+      try {
+        if (auth.code) {
+          const result = await supabase.auth.exchangeCodeForSession(auth.code);
+          error = result.error;
+        } else if (auth.tokenHash && auth.type) {
+          const result = await supabase.auth.verifyOtp({ token_hash: auth.tokenHash, type: auth.type });
+          error = result.error;
+        } else if (auth.accessToken && auth.refreshToken) {
+          const result = await supabase.auth.setSession({
+            access_token: auth.accessToken,
+            refresh_token: auth.refreshToken,
+          });
+          error = result.error;
+        } else {
+          error = new Error('Auth callback is missing a valid code or token.');
+        }
+      } catch (callbackError) {
+        error = callbackError;
       }
 
       if (!mounted) return;
@@ -1792,7 +1838,7 @@ export default function App() {
         pendingConfirmationRef.current = false;
         Alert.alert(
           getLanguageText(languageRef.current, isRecovery ? 'authLinkExpired' : 'authLinkFailed'),
-          getLanguageText(languageRef.current, 'authLinkRetry')
+          getAuthErrorMessage(error)
         );
         go('login');
         return;
@@ -1809,28 +1855,45 @@ export default function App() {
     };
 
     const initializeSession = async () => {
-      const initialUrl = await Linking.getInitialURL();
-      if (initialUrl) await handleAuthUrl(initialUrl);
-      if (!mounted) return;
+      try {
+        const initialUrl = await Linking.getInitialURL();
+        if (initialUrl) await handleAuthUrl(initialUrl);
+        if (!mounted) return;
 
-      const { data } = await getCurrentUser();
-      if (!mounted) return;
+        const { data, error } = await getCurrentUser();
+        if (!mounted) return;
+        if (error) {
+          Alert.alert(getLanguageText(languageRef.current, 'authLinkFailed'), error.message);
+          setScreen('login');
+          setScreenHistory(resetAuthHistory());
+          return;
+        }
 
-      if (data && pendingRecoveryRef.current) {
-        setUser(data);
-        await loadUserData(data);
-        setScreen('resetPassword');
-        setScreenHistory(['login', 'resetPassword']);
-      } else if (data && !pendingConfirmationRef.current) {
-        setUser(data);
-        const loadedProfile = await loadUserData(data);
-        if (!pendingRecoveryRef.current) routeAfterAuth(loadedProfile?.role);
-      } else {
-        setScreen('login');
-        setScreenHistory(resetAuthHistory());
+        if (data && pendingRecoveryRef.current) {
+          setUser(data);
+          await loadUserData(data);
+          setScreen('resetPassword');
+          setScreenHistory(['login', 'resetPassword']);
+        } else if (data && !pendingConfirmationRef.current) {
+          setUser(data);
+          const loadedProfile = await loadUserData(data);
+          if (!pendingRecoveryRef.current) routeAfterAuth(loadedProfile?.role);
+        } else {
+          setScreen('login');
+          setScreenHistory(resetAuthHistory());
+        }
+      } catch (error) {
+        if (mounted) {
+          Alert.alert(
+            getLanguageText(languageRef.current, 'authLinkFailed'),
+            getAuthErrorMessage(error)
+          );
+          setScreen('login');
+          setScreenHistory(resetAuthHistory());
+        }
+      } finally {
+        if (mounted) setAuthLoading(false);
       }
-
-      setAuthLoading(false);
     };
 
     initializeSession();
@@ -1842,35 +1905,49 @@ export default function App() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return;
 
-      if (event === 'PASSWORD_RECOVERY' || pendingRecoveryRef.current) {
-        if (session?.user) {
-          setUser(session.user);
-          await loadUserData(session.user);
+      try {
+        if (event === 'PASSWORD_RECOVERY' || pendingRecoveryRef.current) {
+          if (session?.user) {
+            setUser(session.user);
+            await loadUserData(session.user);
+          }
+          go('resetPassword');
+          return;
         }
-        go('resetPassword');
-        return;
-      }
-      if (pendingConfirmationRef.current) { pendingConfirmationRef.current = false; await supabase.auth.signOut(); resetAuthState(); Alert.alert(getLanguageText(languageRef.current, 'emailConfirmed'), getLanguageText(languageRef.current, 'emailConfirmedBody')); setAuthLoading(false); return; }
 
-      if (!session?.user) {
-        resetAuthState();
+        if (pendingConfirmationRef.current) {
+          pendingConfirmationRef.current = false;
+          await supabase.auth.signOut();
+          resetAuthState();
+          Alert.alert(getLanguageText(languageRef.current, 'emailConfirmed'), getLanguageText(languageRef.current, 'emailConfirmedBody'));
+          setAuthLoading(false);
+          return;
+        }
+
+        if (!session?.user) {
+          resetAuthState();
+          setAuthLoading(false);
+          return;
+        }
+
+        const currentUser = session.user;
+        setUser(currentUser);
+        const loadedProfile = await loadUserData(currentUser);
+        const role = loadedProfile?.role || currentUser?.user_metadata?.role || 'user';
+
+        if (!canAccessAdminScreen(role) && currentUser?.id) {
+          setScreen('home');
+          setScreenHistory(['login', 'home']);
+        } else {
+          routeAfterAuth(role);
+        }
+
         setAuthLoading(false);
-        return;
+      } catch (error) {
+        if (!mounted) return;
+        Alert.alert(getLanguageText(languageRef.current, 'authLinkFailed'), getAuthErrorMessage(error));
+        setAuthLoading(false);
       }
-
-      const currentUser = session.user;
-      setUser(currentUser);
-      const loadedProfile = await loadUserData(currentUser);
-      const role = loadedProfile?.role || currentUser?.user_metadata?.role || 'user';
-
-      if (!canAccessAdminScreen(role) && currentUser?.id) {
-        setScreen('home');
-        setScreenHistory(['login', 'home']);
-      } else {
-        routeAfterAuth(role);
-      }
-
-      setAuthLoading(false);
     });
 
     return () => {

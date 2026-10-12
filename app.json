@@ -2,8 +2,12 @@
   "expo": {
     "name": "MEDSAFE AI",
     "slug": "medsafe-ai",
+    "scheme": "medsafeai",
     "version": "1.1.0",
     "runtimeVersion": "1.0.0",
+    "android": {
+      "package": "com.medsafeai.app"
+    },
     "web": {
       "output": "single",
       "bundler": "metro"

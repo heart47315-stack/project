@@ -20,6 +20,11 @@ create table if not exists public.health_tasks (
 
 alter table public.health_tasks enable row level security;
 
+alter table public.health_tasks add column if not exists series_id uuid;
+update public.health_tasks set series_id = gen_random_uuid() where series_id is null;
+alter table public.health_tasks alter column series_id set default gen_random_uuid();
+alter table public.health_tasks alter column series_id set not null;
+
 drop policy if exists "Users can select own health tasks" on public.health_tasks;
 drop policy if exists "Users can insert own health tasks" on public.health_tasks;
 drop policy if exists "Users can update own health tasks" on public.health_tasks;

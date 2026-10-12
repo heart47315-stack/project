@@ -10,6 +10,9 @@ describe('auth redirect parsing', () => {
       accessToken: null,
       refreshToken: null,
       tokenHash: null,
+      error: null,
+      errorCode: null,
+      errorDescription: null,
     });
   });
 
@@ -22,6 +25,9 @@ describe('auth redirect parsing', () => {
       accessToken: 'token123',
       refreshToken: 'refresh456',
       tokenHash: null,
+      error: null,
+      errorCode: null,
+      errorDescription: null,
     });
   });
 
@@ -32,6 +38,18 @@ describe('auth redirect parsing', () => {
       accessToken: null,
       refreshToken: null,
       tokenHash: 'hash123',
+      error: null,
+      errorCode: null,
+      errorDescription: null,
     });
+  });
+
+  it('extracts callback errors without accepting unrelated URLs', () => {
+    expect(parseAuthUrl('medsafeai://auth/callback?error=access_denied&error_code=otp_expired&error_description=Code+expired')).toMatchObject({
+      error: 'access_denied',
+      errorCode: 'otp_expired',
+      errorDescription: 'Code expired',
+    });
+    expect(parseAuthUrl('https://example.com/auth/callback?code=abc123').code).toBeNull();
   });
 });

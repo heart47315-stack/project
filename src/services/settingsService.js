@@ -10,8 +10,15 @@ export async function getUserSettings(userId) {
   if (auth.error) return { data: null, error: auth.error };
   const result = await supabase.from('user_settings').select('*').eq('user_id', userId).maybeSingle();
   if (result.error || result.data) return result;
-  const { data, error } = await supabase.from('user_settings').insert({ user_id: userId, notifications_enabled: true, language: 'th' }).select().single();
-  return { data, error };
+  const { data, error } = await supabase.from('user_settings')
+    .upsert({ user_id: userId, notifications_enabled: true, language: 'th' }, {
+      onConflict: 'user_id',
+      ignoreDuplicates: true,
+    })
+    .select()
+    .maybeSingle();
+  if (error || data) return { data, error };
+  return supabase.from('user_settings').select('*').eq('user_id', userId).maybeSingle();
 }
 
 export async function updateUserSettings(userId, values) {

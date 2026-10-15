@@ -1,7 +1,18 @@
 import { supabase } from '../lib/supabase';
 import { dateKey, getOccurrenceDates } from '../utils/healthTaskUtils';
 
+function logWriteError(operation, error) {
+  console.error(`[healthTaskService] ${operation} failed`, {
+    code: error?.code,
+    message: error?.message,
+    details: error?.details,
+    hint: error?.hint,
+    name: error?.name,
+  });
+}
+
 async function authorized(userId) {
+  if (!userId) return { error: new Error('A signed-in user is required.') };
   const { data, error } = await supabase.auth.getUser();
   if (error) return { error };
   return data?.user?.id === userId ? { user: data.user } : { error: new Error('Not authorized') };
@@ -10,26 +21,85 @@ async function authorized(userId) {
 export async function listHealthTasks(userId) {
   const auth = await authorized(userId);
   if (auth.error) return { data: null, error: auth.error };
-  return supabase.from('health_tasks').select('*').eq('user_id', userId).order('task_date').order('task_time');
+  return supabase
+    .from('health_tasks')
+    .select('*')
+    .eq('user_id', userId)
+    .is('deleted_at', null)
+    .order('task_date')
+    .order('task_time');
+}
+
+export async function listHealthTaskHistory(userId) {
+  const auth = await authorized(userId);
+  if (auth.error) return { data: null, error: auth.error };
+  return supabase
+    .from('health_task_history')
+    .select('*')
+    .eq('user_id', userId)
+    .order('occurred_at', { ascending: false });
 }
 
 export async function insertHealthTasks(userId, tasks) {
   const auth = await authorized(userId);
   if (auth.error) return { data: null, error: auth.error };
-  if (!tasks.length) return { data: [], error: null };
-  return supabase.from('health_tasks').insert(tasks.map((task) => ({ ...task, user_id: userId }))).select();
+  if (!Array.isArray(tasks) || !tasks.length) return { data: [], error: null };
+  try {
+    const result = await supabase
+      .from('health_tasks')
+      .insert(tasks.map((task) => ({ ...task, user_id: userId })))
+      .select();
+    if (result.error) logWriteError('Health task insert', result.error);
+    return result;
+  } catch (error) {
+    logWriteError('Health task insert request', error);
+    return { data: null, error };
+  }
 }
 
 export async function updateHealthTask(userId, id, values) {
   const auth = await authorized(userId);
   if (auth.error) return { data: null, error: auth.error };
-  return supabase.from('health_tasks').update({ ...values, updated_at: new Date().toISOString() }).eq('id', id).eq('user_id', userId).select().single();
+  try {
+    const result = await supabase
+      .from('health_tasks')
+      .update({ ...values, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .eq('user_id', userId)
+      .is('deleted_at', null)
+      .select()
+      .single();
+    if (result.error) logWriteError('Health task update', result.error);
+    return result;
+  } catch (error) {
+    logWriteError('Health task update request', error);
+    return { data: null, error };
+  }
 }
 
 export async function removeHealthTask(userId, id) {
   const auth = await authorized(userId);
   if (auth.error) return { error: auth.error };
-  return supabase.from('health_tasks').delete().eq('id', id).eq('user_id', userId);
+  try {
+    const { error } = await supabase
+      .from('health_tasks')
+      .update({
+        deleted_at: new Date().toISOString(),
+        enabled: false,
+        notification_id: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .eq('user_id', userId)
+      .is('deleted_at', null)
+      .select('id')
+      .single();
+    if (error) logWriteError('Health task delete', error);
+    return { error };
+  } catch (error) {
+    logWriteError('Health task delete request', error);
+    return { error };
+  }
 }
 
 export async function extendRecurringTasks(userId, tasks, scheduleMissing) {
@@ -55,15 +125,17 @@ export async function extendRecurringTasks(userId, tasks, scheduleMissing) {
       const { data: existing, error: existingError } = await supabase.from('health_tasks').select('task_date,task_time').eq('user_id', userId).eq('series_id', sample.series_id).in('task_date', dates);
       if (existingError) return { error: existingError };
       const existingKeys = new Set((existing || []).map((task) => `${task.task_date}|${task.task_time}`));
-      const missing = dates.filter((taskDate) => !existingKeys.has(`${taskDate}|${sample.task_time}`)).map((taskDate) => ({ ...sample, id: undefined, task_date: taskDate, status: 'pending', completed_at: null, notification_id: null, enabled: true }));
+      const missing = dates.filter((taskDate) => !existingKeys.has(`${taskDate}|${sample.task_time}`)).map((taskDate) => ({ ...sample, id: undefined, task_date: taskDate, status: 'pending', completed_at: null, notification_id: null, enabled: sample.enabled }));
       if (missing.length) {
-        const rows = await scheduleMissing(missing);
+        const rows = sample.enabled
+          ? await scheduleMissing(missing)
+          : { data: missing, error: null };
         if (rows.error) return rows;
         const created = await supabase.from('health_tasks').upsert(rows.data.map((task) => ({ ...task, user_id: userId })), { onConflict: 'series_id,task_date,task_time', ignoreDuplicates: true }).select();
         if (created.error) return created;
       }
     }
-    const { error } = await supabase.from('health_tasks').update({ metadata: { ...sample.metadata, series_generation_until: target }, updated_at: new Date().toISOString() }).eq('user_id', userId).eq('id', sample.id);
+    const { error } = await supabase.from('health_tasks').update({ metadata: { ...sample.metadata, series_generation_until: target }, updated_at: new Date().toISOString() }).eq('user_id', userId).eq('id', sample.id).is('deleted_at', null);
     if (error) return { error };
   }
   return { data: true, error: null };

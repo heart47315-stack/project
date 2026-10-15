@@ -27,6 +27,34 @@ export function getOccurrenceDates({ startDate, endDate, repeatType = 'none', re
   return dates;
 }
 
+export async function prepareTaskReminders(rows, requestPermission, scheduleRows) {
+  const withoutReminders = rows.map((row) => ({
+    ...row,
+    enabled: false,
+    notification_id: null,
+  }));
+
+  try {
+    const permission = await requestPermission();
+    if (!permission.granted) {
+      return { data: withoutReminders, warning: 'permission', error: null };
+    }
+
+    const scheduled = await scheduleRows(rows);
+    if (scheduled.error) {
+      return { data: withoutReminders, warning: 'error', error: scheduled.error };
+    }
+
+    return {
+      data: scheduled.data,
+      warning: scheduled.data.some((row) => !row.notification_id) ? 'partial' : null,
+      error: null,
+    };
+  } catch (error) {
+    return { data: withoutReminders, warning: 'error', error };
+  }
+}
+
 export function matchesTaskDate(taskDate, filter, today = dateKey(new Date())) {
   if (filter === 'all') return true;
   if (filter === 'today') return taskDate === today;

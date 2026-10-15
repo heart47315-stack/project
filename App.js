@@ -725,20 +725,32 @@ function MedicalAI({ go, goBack, onHistory }) {
 
 function DrugSafety({ go, goBack, onSelectDrug, initialQuery = '', onHistory }) {
   const { t } = useLocalizedText();
+  const callbacksRef = useRef({ onHistory, t });
+  callbacksRef.current = { onHistory, t };
   const [q, setQ] = useState(initialQuery);
   const [results, setResults] = useState([]);
+  const [resultCount, setResultCount] = useState(0);
+  const [totalDrugCount, setTotalDrugCount] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [page, setPage] = useState(0);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    setQ(initialQuery);
+  }, [initialQuery]);
 
   useEffect(() => {
     let ignore = false;
     const trimmedQuery = q.trim();
 
-    console.log('[UI debug] search input:', trimmedQuery);
-
     if (!trimmedQuery) {
       setResults([]);
+      setResultCount(0);
+      setPage(0);
+      setTotalDrugCount(null);
       setLoading(false);
+      setLoadingMore(false);
       setError('');
       return () => {
         ignore = true;
@@ -748,33 +760,62 @@ function DrugSafety({ go, goBack, onSelectDrug, initialQuery = '', onHistory }) 
     const fetchResults = async () => {
       setLoading(true);
       setError('');
+      setResults([]);
+      setResultCount(0);
+      setPage(0);
 
-      console.log('[UI debug] calling searchDrugs with:', trimmedQuery);
-      const { data, error: searchError } = await searchDrugs(trimmedQuery);
+      try {
+        const { data, count, totalCount, error: searchError } = await searchDrugs(trimmedQuery, { page: 0 });
+        if (ignore) return;
 
-      if (ignore) return;
-
-      console.log('[UI debug] returned data length:', data?.length ?? 0);
-      console.log('[UI debug] returned error:', searchError);
-
-      if (searchError) {
+        setTotalDrugCount(totalCount);
+        if (searchError) {
+          setResults([]);
+          setError(searchError.message || callbacksRef.current.t('drugSearchFailed'));
+        } else {
+          setResults(data || []);
+          setResultCount(count || 0);
+          if (data?.length) callbacksRef.current.onHistory?.({ action_type: 'drug_search', title: 'ค้นหายา', description: trimmedQuery, metadata: { query: trimmedQuery, result_count: count } });
+        }
+      } catch (searchError) {
+        if (ignore) return;
+        console.error('[DrugSafety] Drug search request failed', searchError);
         setResults([]);
-        setError(searchError.message || 'ไม่สามารถค้นหายาได้ในขณะนี้');
-      } else {
-        setResults(data || []);
-        if (data?.length) onHistory?.({ action_type: 'drug_search', title: 'ค้นหายา', description: trimmedQuery, metadata: { query: trimmedQuery } });
+        setTotalDrugCount(null);
+        setError(callbacksRef.current.t('drugSearchFailed'));
       }
 
       setLoading(false);
     };
 
-    const timeout = setTimeout(fetchResults, 250);
+    const timeout = setTimeout(fetchResults, 350);
 
     return () => {
       ignore = true;
       clearTimeout(timeout);
     };
   }, [q]);
+
+  const loadMore = async () => {
+    if (loadingMore || loading || results.length >= resultCount) return;
+    const nextPage = page + 1;
+    setLoadingMore(true);
+    setError('');
+    try {
+      const { data, error: searchError } = await searchDrugs(q, { page: nextPage });
+      if (searchError) {
+        setError(searchError.message || t('drugSearchFailed'));
+      } else {
+        setResults((current) => [...current, ...(data || [])]);
+        setPage(nextPage);
+      }
+    } catch (searchError) {
+      console.error('[DrugSafety] Loading additional drug results failed', searchError);
+      setError(t('drugSearchFailed'));
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.screen}>
@@ -804,7 +845,11 @@ function DrugSafety({ go, goBack, onSelectDrug, initialQuery = '', onHistory }) 
 
         {error ? <Text style={styles.errorBox}>{error}</Text> : null}
 
-        {!loading && !error && q.trim() && results.length === 0 ? (
+        {!loading && !error && q.trim() && totalDrugCount === 0 ? (
+          <Text style={[styles.muted, { marginTop: 14 }]}>{t('noDrugData')}</Text>
+        ) : null}
+
+        {!loading && !error && q.trim() && totalDrugCount > 0 && results.length === 0 ? (
           <Text style={[styles.muted, { marginTop: 14 }]}>{t('noDrugFound')}</Text>
         ) : null}
 
@@ -813,9 +858,9 @@ function DrugSafety({ go, goBack, onSelectDrug, initialQuery = '', onHistory }) 
         ) : null}
 
         <Text style={styles.sectionTitle}>{t('searchResults')}</Text>
-        {results.slice(0, 20).map((drug) => (
+        {results.map((drug, index) => (
           <Pressable
-            key={`${drug.drug_name}-${drug.source}`}
+            key={`${drug.drug_name || 'drug'}-${drug.source || 'source'}-${index}`}
             style={styles.medicine}
             onPress={() => {
               onSelectDrug(drug);
@@ -827,12 +872,20 @@ function DrugSafety({ go, goBack, onSelectDrug, initialQuery = '', onHistory }) 
               <MaterialCommunityIcons name="pill" size={26} color={BLUE} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.bold}>{drug.drug_name || 'ไม่ระบุชื่อยา'}</Text>
-              <Text style={styles.muted}>{drug.drug_type || 'ไม่ระบุประเภทยา'}</Text>
+              <Text style={styles.bold}>{drug.name_th || drug.drug_name || drug.name_en || 'ไม่ระบุชื่อยา'}</Text>
+              {drug.name_en && drug.name_en !== (drug.name_th || drug.drug_name) ? (
+                <Text style={styles.muted}>{drug.name_en}</Text>
+              ) : null}
+              <Text style={styles.muted}>
+                {[drug.generic_name, drug.brand_name, drug.drug_type].filter(Boolean).join(' • ') || 'ไม่ระบุประเภทยา'}
+              </Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color="#9AA8BA" />
           </Pressable>
         ))}
+        {!loading && results.length > 0 && results.length < resultCount ? (
+          <Button title={t('loadMore')} secondary loading={loadingMore} onPress={loadMore} />
+        ) : null}
 
         <View style={styles.safeBox}>
           <Ionicons name="shield-checkmark" size={28} color={GREEN} />
@@ -877,6 +930,12 @@ function DrugDetail({ go, goBack, selectedDrug, userId, onToggleSave }) {
   };
   const details = [
     ['ชื่อยา', drug.drug_name],
+    ['ชื่อภาษาไทย', drug.name_th],
+    ['ชื่อภาษาอังกฤษ', drug.name_en],
+    ['ชื่อสามัญ', drug.generic_name],
+    ['ชื่อทางการค้า', drug.brand_name],
+    ['ชื่อเรียกอื่น', drug.aliases_th],
+    ['หมวดหมู่ยา', drug.drug_category],
     ['ประเภทยา', drug.drug_type],
     ['รูปแบบยา', drug.dosage_form],
     ['สารสำคัญ', drug.active_ingredient],
@@ -1992,7 +2051,7 @@ export default function App() {
     saved: <Saved go={go} goBack={goBack} userId={user?.id} onChanged={async () => { const result = await getSavedItems(user?.id); if (!result.error) setSavedItems(result.data); }} />,
     settings: <Settings go={go} goBack={goBack} userId={user?.id} onLanguageChange={setLanguage} />,
     reminders: <Reminders go={go} goBack={goBack} userId={user?.id} />,
-    healthTasks: <HealthTasksScreen userId={user?.id} language={language} onBack={goBack} />,
+    healthTasks: <HealthTasksScreen key={user?.id || 'signed-out'} userId={user?.id} language={language} onBack={goBack} />,
     otpLogin: <OtpLogin go={go} onVerified={async (data) => { const currentUser = data?.user; if (!currentUser) return; setUser(currentUser); const loaded = await loadUserData(currentUser); routeAfterAuth(loaded?.role); }} />,
     about: <About go={go} goBack={goBack} />,
   };

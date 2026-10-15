@@ -2,6 +2,7 @@
   "compilerOptions": {},
   "extends": "expo/tsconfig.base",
   "exclude": [
+    "dist/**/*",
     "supabase/functions/**/*",
     "eas-inspect/**/*",
     "**/*.bundle.js",

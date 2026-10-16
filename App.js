@@ -1,5 +1,7 @@
-import React, { useState, useEffect, useRef, useContext, useCallback } from 'react';
+﻿import React, { useState, useEffect, useRef, useContext, useCallback } from 'react';
 import * as Updates from 'expo-updates';
+import * as WebBrowser from 'expo-web-browser';
+import { makeRedirectUri } from 'expo-auth-session';
 import { DEFAULT_LANGUAGE, getLanguageText, normalizeLanguage } from './src/utils/i18n';
 import {
   SafeAreaView,
@@ -23,6 +25,8 @@ import { supabase } from './src/lib/supabase';
 import {
   registerUser,
   loginUser,
+  startGoogleLogin,
+  completeGoogleLogin,
   logoutUser,
   getCurrentUser,
   requestPasswordReset,
@@ -41,7 +45,7 @@ import { getAdminDashboard } from './src/services/adminService';
 import { searchHospitals, getNearbyHospitals } from './src/services/hospitalService';
 import { evaluateRouteRisk, fetchRouteBetween } from './src/services/safeRouteService';
 import { parseAuthUrl } from './src/lib/authRedirect';
-import * as Notifications from 'expo-notifications';
+import * as Notifications from './src/lib/localNotifications';
 import { getReminders, saveReminder, deleteReminder } from './src/services/reminderService';
 import HealthTasksScreen from './src/screens/HealthTasksScreen';
 import {
@@ -54,7 +58,7 @@ import {
 } from './src/utils/navigation';
 import appPackage from './package.json';
 
-Notifications.setNotificationHandler({ handleNotification: async () => ({ shouldShowBanner: true, shouldShowList: true, shouldPlaySound: true, shouldSetBadge: false }) });
+WebBrowser.maybeCompleteAuthSession();
 
 const BLUE = '#2F6FED';
 const DARK = '#18365F';
@@ -154,7 +158,7 @@ function Onboarding({ go, step }) {
   );
 }
 
-function Login({ go, onSubmit, onForgot }) {
+function Login({ go, onSubmit, onGoogleLogin, onForgot }) {
   const { t } = useLocalizedText();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -173,6 +177,19 @@ function Login({ go, onSubmit, onForgot }) {
       if (result?.error) {
         setError(result.error.message || t('loginFailed'));
       }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    setError('');
+    setLoading(true);
+    try {
+      const result = await onGoogleLogin();
+      if (result?.error) setError(result.error.message || t('googleLoginFailed'));
+    } catch {
+      setError(t('googleLoginFailed'));
     } finally {
       setLoading(false);
     }
@@ -217,7 +234,7 @@ function Login({ go, onSubmit, onForgot }) {
         <Button title={t('login')} onPress={handleSubmit} loading={loading} />
         <Button title={t('loginWithOtp')} secondary onPress={() => go('otpLogin')} />
         <Text style={styles.or}>{t('or')}</Text>
-        <Text style={[styles.muted, { textAlign: 'center', marginTop: 14 }]}>{t('googleInfo')}</Text>
+        <Button title={t('loginWithGoogle')} onPress={handleGoogleLogin} secondary icon="logo-google" loading={loading} />
         <Pressable onPress={() => go('register')}>
           <Text style={styles.register}>{t('noAccount')} <Text style={styles.link}>{t('createAccount')}</Text></Text>
         </Pressable>
@@ -1481,10 +1498,117 @@ function Reminders({ go, goBack, userId }) {
   const { t } = useLocalizedText(); const [items, setItems] = useState([]); const [title, setTitle] = useState(''); const [date, setDate] = useState(new Date().toISOString().slice(0,10)); const [time, setTime] = useState('09:00'); const [type, setType] = useState('medication'); const [repeat, setRepeat] = useState('none'); const [editing, setEditing] = useState(null); const [error, setError] = useState('');
   const load = useCallback(async () => { const r = await getReminders(userId); if (r.error) setError(r.error.message); else setItems(r.data || []); }, [userId]);
   useEffect(() => { load(); }, [load]);
-  const create = async () => { setError(''); if (!title.trim()) { setError(t('reminderTitleRequired')); return; } const permission = await Notifications.requestPermissionsAsync(); if (!permission.granted) { setError(t('notificationPermission')); return; } const when = new Date(`${date}T${time}:00`); if (Number.isNaN(when.getTime()) || (repeat === 'none' && when <= new Date())) { setError(t('reminderTimeInvalid')); return; } if (editing?.notification_id) await Notifications.cancelScheduledNotificationAsync(editing.notification_id); const trigger = repeat === 'daily' ? { type: Notifications.SchedulableTriggerInputTypes.DAILY, hour: when.getHours(), minute: when.getMinutes() } : repeat === 'weekly' ? { type: Notifications.SchedulableTriggerInputTypes.WEEKLY, weekday: when.getDay() || 7, hour: when.getHours(), minute: when.getMinutes() } : repeat === 'monthly' ? { type: Notifications.SchedulableTriggerInputTypes.MONTHLY, day: when.getDate(), hour: when.getHours(), minute: when.getMinutes() } : { type: Notifications.SchedulableTriggerInputTypes.DATE, date: when }; const notificationId = await Notifications.scheduleNotificationAsync({ content: { title: title.trim(), body: t('reminderNotice'), channelId: 'reminders' }, trigger }); const result = await saveReminder(userId, { ...(editing || {}), title: title.trim(), reminder_type: type, reminder_date: date, reminder_time: time, repeat_type: repeat, repeat_days: repeat === 'weekly' ? [when.getDay() || 7] : [], enabled: true, notification_id: notificationId, metadata: editing?.metadata || {} }); if (result.error) { await Notifications.cancelScheduledNotificationAsync(notificationId); setError(result.error.message); } else { setTitle(''); setEditing(null); await load(); } };
-  const toggle = async (item) => { if (item.notification_id) await Notifications.cancelScheduledNotificationAsync(item.notification_id); let notification_id = null; if (!item.enabled) { const dt = new Date(`${item.reminder_date}T${item.reminder_time}`); const trigger = item.repeat_type === 'daily' ? { type: Notifications.SchedulableTriggerInputTypes.DAILY, hour: dt.getHours(), minute: dt.getMinutes() } : item.repeat_type === 'weekly' ? { type: Notifications.SchedulableTriggerInputTypes.WEEKLY, weekday: dt.getDay() || 7, hour: dt.getHours(), minute: dt.getMinutes() } : item.repeat_type === 'monthly' ? { type: Notifications.SchedulableTriggerInputTypes.MONTHLY, day: dt.getDate(), hour: dt.getHours(), minute: dt.getMinutes() } : { type: Notifications.SchedulableTriggerInputTypes.DATE, date: dt }; notification_id = await Notifications.scheduleNotificationAsync({ content: { title: item.title, body: t('reminderNotice'), channelId: 'reminders' }, trigger }); } const r = await saveReminder(userId, { ...item, enabled: !item.enabled, notification_id }); if (r.error) setError(r.error.message); else load(); };
+  const create = async () => {
+    setError('');
+    if (!title.trim()) {
+      setError(t('reminderTitleRequired'));
+      return;
+    }
+
+    let notificationId;
+    try {
+      const permission = await Notifications.requestPermissionsAsync();
+      if (!permission.granted) {
+        setError(t('notificationPermission'));
+        return;
+      }
+
+      const when = new Date(`${date}T${time}:00`);
+      if (Number.isNaN(when.getTime()) || (repeat === 'none' && when <= new Date())) {
+        setError(t('reminderTimeInvalid'));
+        return;
+      }
+
+      if (editing?.notification_id) {
+        await Notifications.cancelScheduledNotificationAsync(editing.notification_id);
+      }
+
+      const trigger = repeat === 'daily'
+        ? { type: Notifications.SchedulableTriggerInputTypes.DAILY, hour: when.getHours(), minute: when.getMinutes() }
+        : repeat === 'weekly'
+          ? { type: Notifications.SchedulableTriggerInputTypes.WEEKLY, weekday: when.getDay() || 7, hour: when.getHours(), minute: when.getMinutes() }
+          : repeat === 'monthly'
+            ? { type: Notifications.SchedulableTriggerInputTypes.MONTHLY, day: when.getDate(), hour: when.getHours(), minute: when.getMinutes() }
+            : { type: Notifications.SchedulableTriggerInputTypes.DATE, date: when };
+
+      notificationId = await Notifications.scheduleNotificationAsync({
+        content: { title: title.trim(), body: t('reminderNotice'), channelId: 'reminders' },
+        trigger,
+      });
+
+      const result = await saveReminder(userId, {
+        ...(editing || {}),
+        title: title.trim(),
+        reminder_type: type,
+        reminder_date: date,
+        reminder_time: time,
+        repeat_type: repeat,
+        repeat_days: repeat === 'weekly' ? [when.getDay() || 7] : [],
+        enabled: true,
+        notification_id: notificationId,
+        metadata: editing?.metadata || {},
+      });
+      if (result.error) {
+        await Notifications.cancelScheduledNotificationAsync(notificationId);
+        setError(result.error.message);
+      } else {
+        setTitle('');
+        setEditing(null);
+        await load();
+      }
+    } catch (notificationError) {
+      console.error('[Reminders] Failed to create reminder notification', notificationError);
+      setError(notificationError.message || t('notificationUnavailable'));
+    }
+  };
+  const toggle = async (item) => {
+    try {
+      if (item.notification_id) {
+        await Notifications.cancelScheduledNotificationAsync(item.notification_id);
+      }
+
+      let notification_id = null;
+      if (!item.enabled) {
+        const dt = new Date(`${item.reminder_date}T${item.reminder_time}`);
+        const trigger = item.repeat_type === 'daily'
+          ? { type: Notifications.SchedulableTriggerInputTypes.DAILY, hour: dt.getHours(), minute: dt.getMinutes() }
+          : item.repeat_type === 'weekly'
+            ? { type: Notifications.SchedulableTriggerInputTypes.WEEKLY, weekday: dt.getDay() || 7, hour: dt.getHours(), minute: dt.getMinutes() }
+            : item.repeat_type === 'monthly'
+              ? { type: Notifications.SchedulableTriggerInputTypes.MONTHLY, day: dt.getDate(), hour: dt.getHours(), minute: dt.getMinutes() }
+              : { type: Notifications.SchedulableTriggerInputTypes.DATE, date: dt };
+        notification_id = await Notifications.scheduleNotificationAsync({
+          content: { title: item.title, body: t('reminderNotice'), channelId: 'reminders' },
+          trigger,
+        });
+      }
+
+      const result = await saveReminder(userId, {
+        ...item,
+        enabled: !item.enabled,
+        notification_id,
+      });
+      if (result.error) setError(result.error.message);
+      else await load();
+    } catch (notificationError) {
+      console.error('[Reminders] Failed to update reminder notification', notificationError);
+      setError(notificationError.message || t('notificationUnavailable'));
+    }
+  };
   const edit = (item) => { setEditing(item); setTitle(item.title); setDate(item.reminder_date); setTime(String(item.reminder_time).slice(0,5)); setType(item.reminder_type); setRepeat(item.repeat_type); };
-  const remove = async (item) => { if (item.notification_id) await Notifications.cancelScheduledNotificationAsync(item.notification_id); const r = await deleteReminder(userId, item.id); if (r.error) setError(r.error.message); else load(); };
+  const remove = async (item) => {
+    try {
+      if (item.notification_id) {
+        await Notifications.cancelScheduledNotificationAsync(item.notification_id);
+      }
+      const result = await deleteReminder(userId, item.id);
+      if (result.error) setError(result.error.message);
+      else await load();
+    } catch (notificationError) {
+      console.error('[Reminders] Failed to remove reminder notification', notificationError);
+      setError(notificationError.message || t('notificationUnavailable'));
+    }
+  };
   return <SafeAreaView style={styles.screen}><Header title={t('reminders')} go={go} goBack={goBack} /><ScrollView contentContainerStyle={styles.content}>{error ? <Text style={styles.errorBox}>{error}</Text> : null}<TextInput style={styles.input} placeholder={t('reminderTitle')} value={title} onChangeText={setTitle}/><TextInput style={styles.input} placeholder="YYYY-MM-DD" value={date} onChangeText={setDate}/><TextInput style={styles.input} placeholder="HH:mm" value={time} onChangeText={setTime}/><View style={{flexDirection:'row',gap:6}}>{['medication','appointment','general'].map((v)=><Pressable key={v} onPress={()=>setType(v)}><Text style={styles.link}>{t(v)}{type===v?' ✓':''}</Text></Pressable>)}</View><View style={{flexDirection:'row',gap:6}}>{['none','daily','weekly','monthly'].map((v)=><Pressable key={v} onPress={()=>setRepeat(v)}><Text style={styles.link}>{t(v)}{repeat===v?' ✓':''}</Text></Pressable>)}</View><Button title={editing ? t('saveReminder') : t('addReminder')} onPress={create}/>{items.map((item)=><View style={styles.infoBlock} key={item.id}><Text style={styles.cardTitle}>{item.title}</Text><Text style={styles.muted}>{item.reminder_date} {item.reminder_time} · {t(item.reminder_type)} · {t(item.repeat_type)}</Text><View style={{flexDirection:'row',gap:8}}><Switch value={item.enabled} onValueChange={()=>toggle(item)}/><Pressable onPress={()=>edit(item)}><Text style={styles.link}>{t('editReminder')}</Text></Pressable><Pressable onPress={()=>remove(item)}><Text style={styles.link}>{t('removeItem')}</Text></Pressable></View></View>)}</ScrollView></SafeAreaView>;
 }
 
@@ -1590,10 +1714,18 @@ export default function App() {
   const languageRef = useRef(language);
   languageRef.current = language;
   useEffect(() => {
-    Notifications.setNotificationChannelAsync('reminders', {
+    Notifications.setNotificationHandlerSafely({
+      handleNotification: async () => ({
+        shouldShowBanner: true,
+        shouldShowList: true,
+        shouldPlaySound: true,
+        shouldSetBadge: false,
+      }),
+    });
+    Notifications.setAndroidNotificationChannel('reminders', {
       name: 'Reminders',
       importance: Notifications.AndroidImportance.DEFAULT,
-    }).catch((error) => console.warn('Notification channel setup failed:', error));
+    });
   }, []);
   useEffect(() => {
     const checkForUpdates = async () => {
@@ -1629,6 +1761,7 @@ export default function App() {
   const pendingRecoveryRef = useRef(false);
   const pendingConfirmationRef = useRef(false);
   const processedAuthUrlsRef = useRef(new Set());
+  const oauthRedirectUrlRef = useRef(null);
 
   const resetAuthState = () => {
     setUser(null);
@@ -1761,6 +1894,46 @@ export default function App() {
     return { data: response.data };
   };
 
+  const handleGoogleLogin = async () => {
+    const redirectTo = makeRedirectUri({
+      scheme: 'medsafeai',
+      path: 'auth/callback',
+    });
+    const startResponse = await startGoogleLogin(redirectTo);
+    if (startResponse.error) return startResponse;
+
+    let browserResult;
+    oauthRedirectUrlRef.current = redirectTo;
+    try {
+      browserResult = await WebBrowser.openAuthSessionAsync(startResponse.data.url, redirectTo);
+    } catch (error) {
+      return { error: { message: getAuthErrorMessage(error) } };
+    } finally {
+      oauthRedirectUrlRef.current = null;
+    }
+
+    if (browserResult.type === 'cancel' || browserResult.type === 'dismiss') {
+      return { error: { message: getLanguageText(languageRef.current, 'googleLoginCancelled') } };
+    }
+    if (browserResult.type !== 'success' || !browserResult.url) {
+      return { error: { message: getLanguageText(languageRef.current, 'googleLoginFailed') } };
+    }
+
+    processedAuthUrlsRef.current.add(browserResult.url);
+    const response = await completeGoogleLogin(browserResult.url);
+    if (response.error) return response;
+
+    const currentUser = response.data?.user;
+    if (!currentUser) {
+      return { error: { message: 'เข้าสู่ระบบด้วย Google ไม่สำเร็จ กรุณาลองอีกครั้ง' } };
+    }
+
+    setUser(currentUser);
+    const loadedProfile = await loadUserData(currentUser);
+    routeAfterAuth(loadedProfile?.role);
+    return { data: response.data };
+  };
+
   const handleRegister = async ({
     fullName,
     email,
@@ -1847,6 +2020,7 @@ export default function App() {
     let mounted = true;
 
     const handleAuthUrl = async (url) => {
+      if (oauthRedirectUrlRef.current && url.startsWith(oauthRedirectUrlRef.current)) return;
       const auth = parseAuthUrl(url);
       if (processedAuthUrlsRef.current.has(url)) return;
       if (!auth.code && !auth.accessToken && !auth.tokenHash && !auth.error && !auth.errorCode) return;
@@ -2035,7 +2209,7 @@ export default function App() {
     onboard1: <Onboarding go={go} step="onboard1" />,
     onboard2: <Onboarding go={go} step="onboard2" />,
     onboard3: <Onboarding go={go} step="onboard3" />,
-    login: <Login go={go} onSubmit={handleLogin} onForgot={() => go('forgotPassword')} />,
+    login: <Login go={go} onSubmit={handleLogin} onGoogleLogin={handleGoogleLogin} onForgot={() => go('forgotPassword')} />,
     register: <Register go={go} onSubmit={handleRegister} />,
     forgotPassword: <ForgotPassword go={go} onSubmit={handleForgotPassword} />,
     resetPassword: <ResetPassword go={go} onSubmit={handleUpdatePassword} />,

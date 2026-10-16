@@ -1,8 +1,7 @@
 import { supabase } from '../lib/supabase';
 
-export const AUTH_REDIRECT_SCHEME = 'medsafeai://auth/callback';
-export const AUTH_REDIRECT_URL = AUTH_REDIRECT_SCHEME;
-
+export const AUTH_REDIRECT_URL =
+  process.env.EXPO_PUBLIC_AUTH_REDIRECT_URL || 'medsafeai://auth/callback';
 const normalizeEmail = (value = '') => value.trim().toLowerCase();
 const genericError = 'เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง';
 
@@ -55,6 +54,16 @@ function getFriendlyAuthError(error) {
   }
   if (message.includes('rate limit') || message.includes('too many requests')) {
     return { message: 'ดำเนินการบ่อยเกินไป กรุณารอสักครู่แล้วลองใหม่' };
+  }
+  if (
+    message.includes('unsupported provider') ||
+    message.includes('provider is not enabled') ||
+    message.includes('provider is disabled')
+  ) {
+    return { message: 'Google Login ยังไม่ได้เปิดใช้งานใน Supabase Authentication > Providers' };
+  }
+  if (message.includes('redirect') && (message.includes('not allowed') || message.includes('invalid'))) {
+    return { message: 'Redirect URL นี้ยังไม่ได้เพิ่มใน Supabase Authentication > URL Configuration > Redirect URLs' };
   }
   if (
     code.includes('otp_expired') ||
@@ -245,6 +254,41 @@ export async function loginUser({ email, password }) {
     password,
   }));
 
+  return error ? { error: getFriendlyAuthError(error) } : { data };
+}
+
+export async function startGoogleLogin(redirectTo = AUTH_REDIRECT_URL) {
+  const { data, error } = await runAuthRequest(() => supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo,
+      skipBrowserRedirect: true,
+      queryParams: { prompt: 'select_account' },
+    },
+  }));
+
+  if (error) return { error: getFriendlyAuthError(error) };
+  if (!data?.url) return { error: { message: 'Supabase ไม่ได้ส่ง URL สำหรับเข้าสู่ระบบ Google กลับมา' } };
+  return { data };
+}
+
+export async function completeGoogleLogin(callbackUrl) {
+  let callback;
+  try {
+    callback = new URL(callbackUrl);
+  } catch {
+    return { error: { message: 'URL ตอบกลับจาก Google ไม่ถูกต้อง' } };
+  }
+
+  const callbackError =
+    callback.searchParams.get('error_description') ||
+    callback.searchParams.get('error');
+  if (callbackError) return { error: getFriendlyAuthError(new Error(callbackError)) };
+
+  const code = callback.searchParams.get('code');
+  if (!code) return { error: { message: 'ไม่พบ authorization code จาก Google' } };
+
+  const { data, error } = await runAuthRequest(() => supabase.auth.exchangeCodeForSession(code));
   return error ? { error: getFriendlyAuthError(error) } : { data };
 }
 

@@ -21,7 +21,8 @@
       "url": "https://u.expo.dev/faf23790-fddd-4b0b-901e-a55720bceef8"
     },
     "plugins": [
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      "expo-web-browser"
     ]
   }
 }

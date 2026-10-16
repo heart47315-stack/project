@@ -15,7 +15,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import * as Notifications from 'expo-notifications';
+import * as Notifications from '../lib/localNotifications';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { getLanguageText } from '../utils/i18n';
 import {
@@ -91,19 +91,35 @@ function parseTimeValue(value) {
   return new Date(2000, 0, 1, hour, minute, 0, 0);
 }
 
+async function cancelNotificationsSafely(notificationIds, context) {
+  const results = await Promise.allSettled(
+    notificationIds
+      .filter(Boolean)
+      .map((notificationId) =>
+        Notifications.cancelScheduledNotificationAsync(notificationId)
+      )
+  );
+
+  results.forEach((result) => {
+    if (result.status === 'rejected') {
+      console.warn(`[HealthTasksScreen] ${context}`, result.reason);
+    }
+  });
+}
+
 async function scheduleMissingNotifications(rows, reminderBody) {
-  const permission = await Notifications.getPermissionsAsync();
-
-  if (!permission.granted) {
-    return {
-      data: rows.map((row) => ({ ...row, notification_id: null })),
-      error: null,
-    };
-  }
-
   const scheduled = [];
 
   try {
+    const permission = await Notifications.getPermissionsAsync();
+
+    if (!permission.granted) {
+      return {
+        data: rows.map((row) => ({ ...row, notification_id: null })),
+        error: null,
+      };
+    }
+
     const existing = await Notifications.getAllScheduledNotificationsAsync();
     const available = Math.max(0, 50 - existing.length);
 
@@ -143,12 +159,9 @@ async function scheduleMissingNotifications(rows, reminderBody) {
 
     return { data: scheduled, error: null };
   } catch (scheduleError) {
-    await Promise.all(
-      scheduled.map((row) =>
-        row.notification_id
-          ? Notifications.cancelScheduledNotificationAsync(row.notification_id)
-          : Promise.resolve()
-      )
+    await cancelNotificationsSafely(
+      scheduled.map((row) => row.notification_id),
+      'Failed to cancel a partially scheduled reminder'
     );
 
     return { data: null, error: scheduleError };
@@ -264,8 +277,9 @@ export default function HealthTasksScreen({
             });
 
             if (saved.error) {
-              await Notifications.cancelScheduledNotificationAsync(
-                task.notification_id
+              await cancelNotificationsSafely(
+                [task.notification_id],
+                'Failed to cancel a reminder after saving its task failed'
               );
             }
           }
@@ -615,8 +629,9 @@ export default function HealthTasksScreen({
       }
     } catch (reminderError) {
       if (newNotificationId) {
-        await Notifications.cancelScheduledNotificationAsync(
-          newNotificationId
+        await cancelNotificationsSafely(
+          [newNotificationId],
+          'Failed to cancel a reminder after updating its task failed'
         );
       }
 
@@ -746,8 +761,9 @@ export default function HealthTasksScreen({
 
         if (updated.error) {
           if (notificationId) {
-            await Notifications.cancelScheduledNotificationAsync(
-              notificationId
+            await cancelNotificationsSafely(
+              [notificationId],
+              'Failed to cancel a reminder after updating a task failed'
             );
           }
 
@@ -893,10 +909,9 @@ export default function HealthTasksScreen({
       const result = await insertHealthTasks(userId, scheduled);
 
       if (result.error) {
-        await Promise.all(
-          scheduledNotifications.map((notificationId) =>
-            Notifications.cancelScheduledNotificationAsync(notificationId)
-          )
+        await cancelNotificationsSafely(
+          scheduledNotifications,
+          'Failed to cancel reminders after saving tasks failed'
         );
 
         scheduledNotifications = [];
@@ -914,10 +929,9 @@ export default function HealthTasksScreen({
 
       return true;
     } catch (saveError) {
-      await Promise.all(
-        scheduledNotifications.map((notificationId) =>
-          Notifications.cancelScheduledNotificationAsync(notificationId)
-        )
+      await cancelNotificationsSafely(
+        scheduledNotifications,
+        'Failed to cancel reminders while handling a task save error'
       );
 
       console.error(

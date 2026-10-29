@@ -1867,6 +1867,40 @@ function DateTimeField({
     }
   };
 
+  if (mode === 'time') {
+    return (
+      <View style={formStyles.field}>
+        <Text style={formStyles.label}>{label}</Text>
+
+        <Pressable
+          onPress={() => setPickerVisible(true)}
+          style={formStyles.dateTimeButton}
+        >
+          <Ionicons name="time-outline" size={18} color={BLUE} />
+          <Text
+            style={[
+              formStyles.dateTimeText,
+              !value && formStyles.placeholderText,
+            ]}
+          >
+            {value || 'HH:mm'}
+          </Text>
+          <Ionicons name="chevron-down" size={16} color="#8B9AB2" />
+        </Pressable>
+
+        <TimePickerModal
+          visible={pickerVisible}
+          value={value}
+          onCancel={() => setPickerVisible(false)}
+          onConfirm={(nextValue) => {
+            onChange(nextValue);
+            setPickerVisible(false);
+          }}
+        />
+      </View>
+    );
+  }
+
   return (
     <View style={formStyles.field}>
       <Text style={formStyles.label}>{label}</Text>
@@ -1944,6 +1978,133 @@ function DateTimeField({
         </Modal>
       ) : null}
     </View>
+  );
+}
+
+function TimePickerModal({ visible, value, onCancel, onConfirm }) {
+  const initialTime = parseTimeValue(value);
+  const [hour, setHour] = useState(initialTime.getHours());
+  const [minute, setMinute] = useState(initialTime.getMinutes());
+
+  useEffect(() => {
+    if (!visible) return;
+
+    const nextTime = parseTimeValue(value);
+    setHour(nextTime.getHours());
+    setMinute(nextTime.getMinutes());
+  }, [visible, value]);
+
+  const changeHour = (amount) =>
+    setHour((current) => (current + amount + 24) % 24);
+  const changeMinute = (amount) =>
+    setMinute((current) => (current + amount + 60) % 60);
+  const formattedTime = `${String(hour).padStart(2, '0')}:${String(
+    minute
+  ).padStart(2, '0')}`;
+  const period =
+    hour >= 5 && hour < 12
+      ? 'ช่วงเช้า'
+      : hour >= 12 && hour < 17
+        ? 'ช่วงบ่าย'
+        : hour >= 17 && hour < 21
+          ? 'ช่วงเย็น'
+          : 'ก่อนนอน';
+
+  const selectQuickTime = (nextValue) => {
+    const [nextHour, nextMinute] = nextValue.split(':').map(Number);
+    setHour(nextHour);
+    setMinute(nextMinute);
+  };
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onCancel}
+    >
+      <View style={formStyles.timePickerOverlay}>
+        <View style={formStyles.timePickerCard}>
+          <View style={formStyles.timePickerTitleRow}>
+            <Text style={formStyles.timePickerTitle}>เลือกเวลา</Text>
+            <Text style={formStyles.timePeriod}>{period}</Text>
+          </View>
+
+          <View style={formStyles.timeColumns}>
+            <View style={formStyles.timeColumn}>
+              <Pressable
+                onPress={() => changeHour(1)}
+                style={formStyles.timeArrow}
+              >
+                <Text style={formStyles.timeArrowText}>⌃</Text>
+              </Pressable>
+              <Text style={formStyles.timeValue}>{String(hour).padStart(2, '0')}</Text>
+              <Pressable
+                onPress={() => changeHour(-1)}
+                style={formStyles.timeArrow}
+              >
+                <Text style={formStyles.timeArrowText}>⌄</Text>
+              </Pressable>
+              <Text style={formStyles.timeUnit}>ชั่วโมง</Text>
+            </View>
+
+            <Text style={formStyles.timeSeparator}>:</Text>
+
+            <View style={formStyles.timeColumn}>
+              <Pressable
+                onPress={() => changeMinute(1)}
+                style={formStyles.timeArrow}
+              >
+                <Text style={formStyles.timeArrowText}>⌃</Text>
+              </Pressable>
+              <Text style={formStyles.timeValue}>
+                {String(minute).padStart(2, '0')}
+              </Text>
+              <Pressable
+                onPress={() => changeMinute(-1)}
+                style={formStyles.timeArrow}
+              >
+                <Text style={formStyles.timeArrowText}>⌄</Text>
+              </Pressable>
+              <Text style={formStyles.timeUnit}>นาที</Text>
+            </View>
+          </View>
+
+          <Text style={formStyles.frequentTimeLabel}>เวลาที่ใช้บ่อย</Text>
+          <View style={formStyles.frequentTimeGrid}>
+            {[
+              ['เช้า 08:00', '08:00'],
+              ['กลางวัน 12:00', '12:00'],
+              ['เย็น 18:00', '18:00'],
+              ['ก่อนนอน 21:00', '21:00'],
+            ].map(([label, nextValue]) => (
+              <Pressable
+                key={nextValue}
+                onPress={() => selectQuickTime(nextValue)}
+                style={formStyles.frequentTimeButton}
+              >
+                <Text style={formStyles.frequentTimeText}>{label}</Text>
+              </Pressable>
+            ))}
+          </View>
+
+          <View style={formStyles.timeActionRow}>
+            <Pressable
+              onPress={onCancel}
+              style={[formStyles.timeActionButton, formStyles.timeCancelButton]}
+            >
+              <Text style={formStyles.timeCancelText}>ยกเลิก</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => onConfirm(formattedTime)}
+              style={[formStyles.timeActionButton, formStyles.timeConfirmButton]}
+            >
+              <Text style={formStyles.timeConfirmText}>ตกลง</Text>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -2531,6 +2692,101 @@ const formStyles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 8,
   },
+  timePickerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.42)',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  timePickerCard: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    paddingHorizontal: 25,
+    paddingTop: 25,
+    paddingBottom: 24,
+  },
+  timePickerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 17,
+  },
+  timePickerTitle: { color: '#111', fontSize: 20, fontWeight: '700' },
+  timePeriod: {
+    backgroundColor: '#D9E9FF',
+    color: '#2871D1',
+    borderRadius: 18,
+    paddingHorizontal: 13,
+    paddingVertical: 7,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  timeColumns: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 22,
+  },
+  timeColumn: { alignItems: 'center' },
+  timeArrow: {
+    width: 80,
+    height: 45,
+    borderWidth: 1,
+    borderColor: '#D2D2D2',
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timeArrowText: { color: '#111', fontSize: 22, lineHeight: 22 },
+  timeValue: {
+    color: '#111',
+    fontSize: 61,
+    fontWeight: '300',
+    lineHeight: 72,
+  },
+  timeSeparator: {
+    color: '#111',
+    fontSize: 55,
+    fontWeight: '300',
+    marginTop: -35,
+  },
+  timeUnit: { color: '#777', fontSize: 12, marginTop: 3 },
+  frequentTimeLabel: {
+    color: '#111',
+    fontSize: 14,
+    marginTop: 18,
+    marginBottom: 9,
+  },
+  frequentTimeGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 9,
+  },
+  frequentTimeButton: {
+    width: '47%',
+    borderWidth: 1,
+    borderColor: '#D2D2D2',
+    borderRadius: 10,
+    alignItems: 'center',
+    paddingVertical: 11,
+  },
+  frequentTimeText: { color: '#111', fontSize: 15, fontWeight: '600' },
+  timeActionRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 24,
+  },
+  timeActionButton: {
+    flex: 1,
+    height: 56,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timeCancelButton: { borderWidth: 1, borderColor: '#D2D2D2' },
+  timeConfirmButton: { backgroundColor: BLUE },
+  timeCancelText: { color: '#111', fontSize: 15, fontWeight: '600' },
+  timeConfirmText: { color: '#fff', fontSize: 15, fontWeight: '700' },
 });
 
 const detailStyles = StyleSheet.create({

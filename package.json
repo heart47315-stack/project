@@ -11,7 +11,9 @@
     "build:web": "node ./node_modules/expo/bin/cli export --platform web --output-dir dist",
     "lint": "eslint .",
     "test": "jest --runInBand",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "validate:finetune": "node scripts/validate-finetune-dataset.mjs",
+    "split:finetune": "node scripts/split-finetune-dataset.mjs"
   },
   "jest": {
     "preset": "jest-expo",
@@ -56,6 +58,7 @@
     "eslint": "^9.39.5",
     "eslint-config-expo": "~10.0.0",
     "jest-expo": "~54.0.18",
+    "supabase": "^2.122.0",
     "typescript": "~5.9.2"
   },
   "overrides": {

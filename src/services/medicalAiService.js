@@ -17,7 +17,14 @@ export async function sendMedicalQuestion(question, history = []) {
   const trimmedQuestion = String(question || '').trim();
   if (!trimmedQuestion) return { error: { message: 'กรุณาพิมพ์คำถามก่อนส่ง' } };
   try {
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+    const accessToken = sessionData?.session?.access_token;
+    if (sessionError || !accessToken) {
+      return { error: { message: 'กรุณาเข้าสู่ระบบก่อนใช้งาน Medical AI' } };
+    }
+
     const { data: payload, error } = await supabase.functions.invoke(FUNCTION_NAME, {
+      headers: { Authorization: `Bearer ${accessToken}` },
       body: {
         message: trimmedQuestion,
         question: trimmedQuestion,

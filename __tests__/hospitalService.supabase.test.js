@@ -21,6 +21,10 @@ describe('hospital service with Supabase', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [],
+    });
     tableResult = { data: [], error: null };
     query = {
       select: jest.fn(() => query),
@@ -94,14 +98,58 @@ describe('hospital service with Supabase', () => {
     expect(result.data[0].distance_km).toBeLessThan(result.data[1].distance_km);
   });
 
-  it('surfaces database failures instead of returning sample records', async () => {
+  it('falls back to Nominatim when Supabase has no matching records', async () => {
     mockRpc.mockResolvedValue({ data: null, error: new Error('RPC unavailable') });
-    tableResult = { data: null, error: new Error('Database unavailable') };
+    tableResult = { data: [], error: null };
+    global.fetch.mockResolvedValue({
+      ok: true,
+      json: async () => [{
+        place_id: 456,
+        display_name: 'ร้านขายยาจริง, เชียงใหม่',
+        type: 'pharmacy',
+        lat: '18.7883',
+        lon: '98.9853',
+      }],
+    });
+
+    const result = await searchHospitals('ร้านขายยา');
+
+    expect(result.error).toBeNull();
+    expect(result.data[0]).toMatchObject({
+      name: 'ร้านขายยาจริง',
+      source: 'NOMINATIM',
+      latitude: 18.7883,
+      longitude: 98.9853,
+    });
+  });
+
+  it('distinguishes no Nominatim results from a service failure', async () => {
+    mockRpc.mockResolvedValue({ data: [], error: null });
+    global.fetch.mockResolvedValue({ ok: true, json: async () => [] });
+
+    const noResults = await searchHospitals('สถานที่ที่ไม่มีอยู่จริง');
+
+    expect(noResults).toEqual({ data: [], error: null });
+
+    global.fetch.mockResolvedValue({ ok: false, json: async () => ({}) });
+    const httpFailure = await searchHospitals('โรงพยาบาล');
+
+    expect(httpFailure.data).toEqual([]);
+    expect(httpFailure.error).toBeInstanceOf(Error);
+    expect(httpFailure.error.code).toBe('nominatim-http-error');
+  });
+
+  it('returns a clear error when Nominatim times out', async () => {
+    mockRpc.mockResolvedValue({ data: [], error: null });
+    const timeoutError = new Error('aborted');
+    timeoutError.name = 'AbortError';
+    global.fetch.mockRejectedValue(timeoutError);
 
     const result = await searchHospitals('โรงพยาบาล');
 
     expect(result.data).toEqual([]);
-    expect(result.error.message).toBe('Database unavailable');
+    expect(result.error).toBeInstanceOf(Error);
+    expect(result.error.code).toBe('nominatim-timeout');
   });
 
   it('looks up a hospital by ID and reports missing IDs', async () => {

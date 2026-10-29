@@ -17,6 +17,9 @@ module.exports = [
       'src-lib-map-web-safe.js',
       'map-web-safe.served.js',
       'AppEntry.bundle.js',
+      // Legacy, unreferenced Firebase implementation retained for history.
+      'src/firebase.js',
+      'App.backup.js',
     ],
   },
   {

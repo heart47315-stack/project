@@ -1,4 +1,9 @@
 const EARTH_RADIUS_KM = 6371;
+const OSRM_TIMEOUT_MS = 10000;
+
+export function isCurrentRouteRequest(requestId, latestRequestId) {
+  return requestId === latestRequestId;
+}
 
 export async function fetchRouteBetween(origin, destination) {
   if (!origin || !destination) {
@@ -12,24 +17,59 @@ export async function fetchRouteBetween(origin, destination) {
     return { ok: false, error: 'invalid-route-points', route: [] };
   }
 
+  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  let timeout = null;
+
   try {
     const url = `https://router.project-osrm.org/route/v1/driving/${from.longitude},${from.latitude};${to.longitude},${to.latitude}?overview=full&geometries=geojson&steps=false`;
-    const response = await fetch(url);
+    const request = fetch(url, {
+      ...(controller ? { signal: controller.signal } : {}),
+    });
+    const timeoutPromise = new Promise((_, reject) => {
+      timeout = setTimeout(() => {
+        if (controller) controller.abort();
+        const timeoutError = new Error('OSRM request timed out');
+        timeoutError.code = 'osrm-timeout';
+        reject(timeoutError);
+      }, OSRM_TIMEOUT_MS);
+    });
+    const response = await Promise.race([request, timeoutPromise]);
     if (!response.ok) {
-      return { ok: false, error: 'osrm-unavailable', route: [] };
+      return { ok: false, error: 'osrm-http-error', route: [] };
     }
 
-    const payload = await response.json();
+    let payload;
+    try {
+      payload = await Promise.race([response.json(), timeoutPromise]);
+    } catch {
+      return { ok: false, error: 'invalid-route-response', route: [], distanceKm: null };
+    }
     const route = extractRouteCoordinates(payload);
+    const rawDistanceKm = Number(payload?.routes?.[0]?.distance) / 1000;
+    const hasValidDistance = Number.isFinite(rawDistanceKm) && rawDistanceKm >= 0;
+
+    if (route.length < 2) {
+      return { ok: false, error: 'no-route-found', route: [], distanceKm: null };
+    }
+
+    if (!hasValidDistance) {
+      return { ok: false, error: 'invalid-route-response', route: [], distanceKm: null };
+    }
 
     return {
-      ok: route.length >= 2,
-      error: route.length >= 2 ? null : 'no-route-found',
+      ok: true,
+      error: null,
       route,
+      distanceKm: rawDistanceKm,
       raw: payload,
     };
-  } catch {
-    return { ok: false, error: 'route-fetch-failed', route: [] };
+  } catch (error) {
+    if (error?.code === 'osrm-timeout' || error?.name === 'AbortError' || error?.code === 'ABORT_ERR') {
+      return { ok: false, error: 'osrm-timeout', route: [] };
+    }
+    return { ok: false, error: 'osrm-network-error', route: [] };
+  } finally {
+    if (timeout) clearTimeout(timeout);
   }
 }
 
@@ -41,10 +81,14 @@ export function extractRouteCoordinates(payload) {
     return [];
   }
 
-  return candidate.coordinates.map(([longitude, latitude]) => ({
-    latitude: Number(latitude),
-    longitude: Number(longitude),
-  }));
+  const points = candidate.coordinates.map((coordinate) => {
+    if (!Array.isArray(coordinate) || coordinate.length < 2) return null;
+    const [longitude, latitude] = coordinate;
+    const point = normalizePoint({ latitude, longitude });
+    return point;
+  });
+
+  return points.every(Boolean) ? points : [];
 }
 
 function clamp(value, min, max) {
@@ -52,14 +96,13 @@ function clamp(value, min, max) {
 }
 
 function normalizePoint(point) {
-  if (!point || !Number.isFinite(Number(point.latitude)) || !Number.isFinite(Number(point.longitude))) {
+  const latitude = Number(point?.latitude);
+  const longitude = Number(point?.longitude);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
     return null;
   }
 
-  return {
-    latitude: Number(point.latitude),
-    longitude: Number(point.longitude),
-  };
+  return { latitude, longitude };
 }
 
 function haversineDistanceKm(from, to) {
@@ -87,7 +130,7 @@ function normalizeRoutePoints(routePoints = []) {
   return routePoints.map(normalizePoint).filter(Boolean);
 }
 
-export function evaluateRouteRisk({ origin, destination, routePoints = [] }) {
+export function evaluateRouteRisk({ origin, destination, routePoints = [], routeDistanceKm = null }) {
   const source = normalizePoint(origin) || normalizeRoutePoints(routePoints)[0] || null;
   const target = normalizePoint(destination) || normalizeRoutePoints(routePoints).at(-1) || null;
 
@@ -103,7 +146,9 @@ export function evaluateRouteRisk({ origin, destination, routePoints = [] }) {
   }
 
   const points = normalizeRoutePoints(routePoints);
-  const distanceKm = haversineDistanceKm(source, target);
+  const distanceKm = routeDistanceKm !== null && routeDistanceKm !== undefined && Number.isFinite(Number(routeDistanceKm))
+    ? Number(routeDistanceKm)
+    : haversineDistanceKm(source, target);
   const segmentCount = Math.max(points.length - 1, 1);
   const pointSpread = Math.min(35, Math.max(0, points.length * 4));
 

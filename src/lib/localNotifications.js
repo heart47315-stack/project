@@ -1,25 +1,30 @@
 import { Platform } from 'react-native';
-import {
-  getPermissionsAsync,
-  requestPermissionsAsync,
-} from 'expo-notifications/build/NotificationPermissions';
-import { getAllScheduledNotificationsAsync } from 'expo-notifications/build/getAllScheduledNotificationsAsync';
-import { scheduleNotificationAsync } from 'expo-notifications/build/scheduleNotificationAsync';
-import { cancelScheduledNotificationAsync } from 'expo-notifications/build/cancelScheduledNotificationAsync';
-import { setNotificationChannelAsync } from 'expo-notifications/build/setNotificationChannelAsync';
-import { setNotificationHandler } from 'expo-notifications/build/NotificationsHandler';
-import { AndroidImportance } from 'expo-notifications/build/NotificationChannelManager.types';
-import { SchedulableTriggerInputTypes } from 'expo-notifications/build/Notifications.types';
+import * as ExpoNotifications from 'expo-notifications';
 
 export {
+  ExpoNotifications,
+};
+
+export const {
   getPermissionsAsync,
   requestPermissionsAsync,
-  getAllScheduledNotificationsAsync,
   scheduleNotificationAsync,
   cancelScheduledNotificationAsync,
+  setNotificationChannelAsync,
+  setNotificationHandler,
   AndroidImportance,
   SchedulableTriggerInputTypes,
-};
+} = ExpoNotifications;
+
+// Keep this binding available even when the app is rendered on web, where the
+// native scheduler is not exposed by expo-notifications.
+export async function getAllScheduledNotificationsAsync() {
+  if (typeof ExpoNotifications.getAllScheduledNotificationsAsync !== 'function') {
+    return [];
+  }
+
+  return ExpoNotifications.getAllScheduledNotificationsAsync();
+}
 
 export function isLocalNotificationsSupported() {
   return Platform.OS === 'android' || Platform.OS === 'ios';
@@ -33,14 +38,21 @@ export function setNotificationHandlerSafely(handler) {
   if (!isLocalNotificationsSupported()) return;
 
   try {
-    setNotificationHandler(handler);
+    if (typeof setNotificationHandler === 'function') {
+      setNotificationHandler(handler);
+    }
   } catch (error) {
     console.warn('Notification handler setup failed:', error);
   }
 }
 
 export async function setAndroidNotificationChannel(channelId, channel) {
-  if (!supportsAndroidNotificationChannels()) return null;
+  if (
+    !supportsAndroidNotificationChannels() ||
+    typeof setNotificationChannelAsync !== 'function'
+  ) {
+    return null;
+  }
 
   try {
     return await setNotificationChannelAsync(channelId, channel);

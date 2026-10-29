@@ -43,7 +43,11 @@ import { getSavedItems, saveItem, removeSavedItem, isItemSaved } from './src/ser
 import { getUserSettings, updateUserSettings } from './src/services/settingsService';
 import { getAdminDashboard } from './src/services/adminService';
 import { searchHospitals, getNearbyHospitals } from './src/services/hospitalService';
-import { evaluateRouteRisk, fetchRouteBetween } from './src/services/safeRouteService';
+import {
+  evaluateRouteRisk,
+  fetchRouteBetween,
+  isCurrentRouteRequest,
+} from './src/services/safeRouteService';
 import { parseAuthUrl } from './src/lib/authRedirect';
 import * as Notifications from './src/lib/localNotifications';
 import { getReminders, saveReminder, deleteReminder } from './src/services/reminderService';
@@ -995,15 +999,12 @@ function SafeRoute({ go, goBack, onHistory }) {
   const [destination, setDestination] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [selectedDestination, setSelectedDestination] = useState(null);
-  const [routePoints, setRoutePoints] = useState([
-    { latitude: 13.7563, longitude: 100.5018 },
-    { latitude: 13.7611, longitude: 100.5081 },
-    { latitude: 13.7657, longitude: 100.5162 },
-  ]);
+  const [routePoints, setRoutePoints] = useState([]);
   const [routeLoading, setRouteLoading] = useState(false);
   const [riskResult, setRiskResult] = useState(null);
   const [error, setError] = useState('');
   const locationWatcherRef = useRef(null);
+  const routeRequestIdRef = useRef(0);
 
   const stopTracking = () => {
     if (locationWatcherRef.current) {
@@ -1012,36 +1013,30 @@ function SafeRoute({ go, goBack, onHistory }) {
     }
   };
 
-  useEffect(() => () => stopTracking(), []);
+  useEffect(() => () => {
+    stopTracking();
+    routeRequestIdRef.current += 1;
+  }, []);
 
-  const makeRoutePoints = (origin, destinationPoint = null) => {
-    const lat = Number(origin.latitude);
-    const lng = Number(origin.longitude);
-    const fallbackDest = destinationPoint || { latitude: lat + 0.0048, longitude: lng + 0.0089 };
-    return [
-      { latitude: lat, longitude: lng },
-      { latitude: lat + 0.0022, longitude: lng + 0.0048 },
-      { latitude: lat + 0.0048, longitude: lng + 0.0067 },
-      { latitude: fallbackDest.latitude, longitude: fallbackDest.longitude },
-    ];
-  };
-
-  const localHospitalFallback = (query) => {
-    const q = String(query || '').trim().toLowerCase();
-    const list = [
-      { name: 'โรงพยาบาลศูนย์กลาง', type: 'โรงพยาบาล', address: '123 ถนนตัวอย่าง แขวงพญาไท', province: 'กรุงเทพมหานคร', district: 'พญาไท', latitude: 13.7500, longitude: 100.5650, phone: '02-XXX-XXXX', source: 'SAMPLE' },
-      { name: 'คลินิกตัวอย่าง', type: 'คลินิก', address: '456 ซอยตัวอย่าง เขตราชเทวี', province: 'กรุงเทพมหานคร', district: 'ราชเทวี', latitude: 13.7468, longitude: 100.5678, phone: '02-YYY-YYYY', source: 'SAMPLE' },
-    ];
-
-    if (!q) return [];
-    return list.filter((item) => item.name.toLowerCase().includes(q) || item.address.toLowerCase().includes(q) || item.district.toLowerCase().includes(q));
+  const hasValidCoordinate = (point) => {
+    const latitude = Number(point?.latitude);
+    const longitude = Number(point?.longitude);
+    return Number.isFinite(latitude) && Number.isFinite(longitude) &&
+      latitude >= -90 && latitude <= 90 && longitude >= -180 && longitude <= 180;
   };
 
   const loadRealRoute = async (origin, destination) => {
     if (!origin || !destination) return null;
 
+    const requestId = routeRequestIdRef.current + 1;
+    routeRequestIdRef.current = requestId;
+    setRoutePoints([]);
+    setRiskResult(null);
+    setError('');
     setRouteLoading(true);
     const result = await fetchRouteBetween(origin, destination);
+
+    if (!isCurrentRouteRequest(requestId, routeRequestIdRef.current)) return null;
     setRouteLoading(false);
 
     if (result.ok && result.route?.length >= 2) {
@@ -1050,17 +1045,28 @@ function SafeRoute({ go, goBack, onHistory }) {
         origin,
         destination,
         routePoints: result.route,
+        routeDistanceKm: result.distanceKm,
       });
       setRiskResult(nextRisk);
       return result.route;
     }
 
+    const routeErrorMessages = {
+      'osrm-timeout': 'บริการคำนวณเส้นทางใช้เวลานานเกินไป กรุณาลองใหม่',
+      'osrm-http-error': 'บริการคำนวณเส้นทางขัดข้อง กรุณาลองใหม่',
+      'osrm-network-error': 'ไม่สามารถเชื่อมต่อบริการคำนวณเส้นทางได้',
+      'invalid-route-response': 'ได้รับข้อมูลเส้นทางจาก OSRM ไม่ถูกต้อง',
+      'no-route-found': 'ไม่พบเส้นทางถนนสำหรับจุดเริ่มต้นและปลายทางนี้',
+    };
+    setError(routeErrorMessages[result.error] || 'ไม่สามารถคำนวณเส้นทางถนนจาก OSRM ได้ กรุณาลองใหม่');
     return null;
   };
 
   const assessCurrentLocation = async () => {
     setLoading(true);
     setError('');
+    setRiskResult(null);
+    setRoutePoints([]);
     try {
       const providerStatus = await Location.getProviderStatusAsync();
       if (!providerStatus.locationServicesEnabled) {
@@ -1091,7 +1097,7 @@ function SafeRoute({ go, goBack, onHistory }) {
         }
       }
 
-      if (!coords || !Number.isFinite(coords.latitude) || !Number.isFinite(coords.longitude)) {
+      if (!hasValidCoordinate(coords)) {
         setError('ไม่พบพิกัด GPS ที่ถูกต้อง');
         return;
       }
@@ -1101,27 +1107,11 @@ function SafeRoute({ go, goBack, onHistory }) {
 
       setLocation(coords);
       setLocationAccuracy(safeAccuracy);
-      const startPoints = makeRoutePoints(origin, selectedDestination || null);
-      setRoutePoints(startPoints);
+      setRoutePoints([]);
 
       if (selectedDestination) {
-        const realRoute = await loadRealRoute(origin, selectedDestination);
-        if (!realRoute) {
-          const routeFromCurrent = makeRoutePoints(origin, { latitude: selectedDestination.latitude, longitude: selectedDestination.longitude });
-          setRoutePoints(routeFromCurrent);
-        }
+        await loadRealRoute(origin, selectedDestination);
       }
-
-      const routePointsForRisk = selectedDestination
-        ? (routePoints?.length > 1 ? routePoints : makeRoutePoints(origin, selectedDestination))
-        : startPoints;
-
-      const risk = evaluateRouteRisk({
-        origin,
-        destination: selectedDestination || null,
-        routePoints: routePointsForRisk,
-      });
-      setRiskResult(risk);
 
       stopTracking();
       locationWatcherRef.current = await Location.watchPositionAsync(
@@ -1132,7 +1122,7 @@ function SafeRoute({ go, goBack, onHistory }) {
         },
         (watchPosition) => {
           const nextCoords = watchPosition.coords;
-          if (!nextCoords) return;
+          if (!hasValidCoordinate(nextCoords)) return;
 
           const nextLocation = {
             latitude: nextCoords.latitude,
@@ -1147,9 +1137,7 @@ function SafeRoute({ go, goBack, onHistory }) {
           setLocationAccuracy(Number.isFinite(nextCoords.accuracy) ? nextCoords.accuracy : null);
 
           if (selectedDestination) {
-            setRoutePoints(makeRoutePoints({ latitude: nextCoords.latitude, longitude: nextCoords.longitude }, selectedDestination));
-          } else {
-            setRoutePoints(makeRoutePoints({ latitude: nextCoords.latitude, longitude: nextCoords.longitude }));
+            loadRealRoute({ latitude: nextCoords.latitude, longitude: nextCoords.longitude }, selectedDestination);
           }
         }
       );
@@ -1180,80 +1168,41 @@ function SafeRoute({ go, goBack, onHistory }) {
     setSearchLoading(true);
     try {
       const result = await searchHospitals(query);
+      if (result.error) {
+        setError(result.error.message || 'บริการค้นหาสถานที่ขัดข้อง กรุณาลองใหม่');
+        return;
+      }
       if (!result.error && result.data?.length) {
         const first = result.data[0];
         const safeDestination = {
           name: first.name || first.hospital_name || first.title || query,
           address: first.address || first.location || '',
-          latitude: Number(first.latitude || first.lat || 13.7500),
-          longitude: Number(first.longitude || first.lng || 100.5650),
+          latitude: Number(first.latitude ?? first.lat),
+          longitude: Number(first.longitude ?? first.lng),
           source: first.source || 'supabase',
         };
 
         setSearchResults(result.data.slice(0, 5));
+
+        if (!hasValidCoordinate(safeDestination)) {
+          setError('ผลการค้นหาไม่มีพิกัดที่ถูกต้อง');
+          return;
+        }
         setSelectedDestination(safeDestination);
+        if (!location) {
+          setError('กรุณาอนุญาตตำแหน่งปัจจุบันก่อนคำนวณเส้นทาง');
+          return;
+        }
+        const baseOrigin = { latitude: location.latitude, longitude: location.longitude };
 
-        const baseOrigin = location
-          ? { latitude: location.latitude, longitude: location.longitude }
-          : { latitude: 13.7563, longitude: 100.5018 };
-
-        const realRoute = await loadRealRoute(baseOrigin, safeDestination);
-        const routeFromSearch = realRoute || makeRoutePoints(baseOrigin, safeDestination);
-        setRoutePoints(routeFromSearch);
-        setRiskResult(evaluateRouteRisk({ origin: baseOrigin, destination: safeDestination, routePoints: routeFromSearch }));
+        await loadRealRoute(baseOrigin, safeDestination);
 
         return;
       }
 
-      const fallback = localHospitalFallback(query);
-      if (fallback.length) {
-        const firstFallback = fallback[0];
-        const chosen = {
-          name: firstFallback.name,
-          address: firstFallback.address,
-          latitude: Number(firstFallback.latitude),
-          longitude: Number(firstFallback.longitude),
-          source: 'local-fallback',
-        };
-        setSelectedDestination(chosen);
-        setSearchResults(fallback);
-
-        const baseOrigin = location
-          ? { latitude: location.latitude, longitude: location.longitude }
-          : { latitude: 13.7563, longitude: 100.5018 };
-
-        const realRoute = await loadRealRoute(baseOrigin, chosen);
-        const routeFromFallback = realRoute || makeRoutePoints(baseOrigin, chosen);
-        setRoutePoints(routeFromFallback);
-        setRiskResult(evaluateRouteRisk({ origin: baseOrigin, destination: chosen, routePoints: routeFromFallback }));
-      } else {
-        setError('ไม่พบสถานที่ปลายทางที่ตรงกับคำค้นหา');
-      }
+      setError('ไม่พบสถานที่ปลายทางที่ตรงกับคำค้นหา กรุณาตรวจสอบชื่อหรือที่อยู่');
     } catch {
-      const fallback = localHospitalFallback(query);
-      if (fallback.length) {
-        const firstFallback = fallback[0];
-        const fallbackDestination = {
-          name: firstFallback.name,
-          address: firstFallback.address,
-          latitude: Number(firstFallback.latitude),
-          longitude: Number(firstFallback.longitude),
-          source: 'local-fallback',
-        };
-        setSelectedDestination(fallbackDestination);
-        setSearchResults(fallback);
-
-        const baseOrigin = location
-          ? { latitude: location.latitude, longitude: location.longitude }
-          : { latitude: 13.7563, longitude: 100.5018 };
-
-        const realRoute = await loadRealRoute(baseOrigin, fallbackDestination);
-        const fallbackRoute = realRoute || makeRoutePoints(baseOrigin, fallbackDestination);
-        setRoutePoints(fallbackRoute);
-        setRiskResult(evaluateRouteRisk({ origin: baseOrigin, destination: fallbackDestination, routePoints: fallbackRoute }));
-      } else {
-        setError('ไม่สามารถค้นหาสถานที่ปลายทางได้ กรุณาลองใหม่');
-      }
+      setError('ไม่สามารถค้นหาสถานที่ปลายทางได้ กรุณาตรวจสอบการเชื่อมต่อแล้วลองใหม่');
     } finally {
       setSearchLoading(false);
     }
@@ -1267,8 +1216,8 @@ function SafeRoute({ go, goBack, onHistory }) {
         longitudeDelta: 0.008,
       }
     : {
-        latitude: 13.7563,
-        longitude: 100.5018,
+        latitude: 0,
+        longitude: 0,
         latitudeDelta: 0.015,
         longitudeDelta: 0.015,
       };
@@ -1280,7 +1229,7 @@ function SafeRoute({ go, goBack, onHistory }) {
       <View style={styles.locationPanel}>
         <Ionicons name="navigate-circle-outline" size={76} color={BLUE} />
         <Text style={styles.bold}>ประเมินตำแหน่งปัจจุบัน</Text>
-        <Text style={[styles.muted, { textAlign: 'center', marginTop: 6 }]}>ค้นหาจุดหมายและประเมินตำแหน่ง GPS จริงแบบ fallback route renderer ภายในแอป</Text>
+        <Text style={[styles.muted, { textAlign: 'center', marginTop: 6 }]}>ค้นหาสถานที่จริงและคำนวณเส้นทางถนนด้วย GPS และ OSRM</Text>
       </View>
 
       <View style={styles.routeMapWrap}>
@@ -1324,14 +1273,13 @@ function SafeRoute({ go, goBack, onHistory }) {
                 const selected = item.name ? item : {
                   name: item.hospital_name || item.title || 'สถานที่ที่เลือก',
                   address: item.address || '',
-                  latitude: Number(item.latitude || item.lat || 13.7500),
-                  longitude: Number(item.longitude || item.lng || 100.5650),
+                  latitude: Number(item.latitude ?? item.lat),
+                  longitude: Number(item.longitude ?? item.lng),
                   source: item.source || 'local',
                 };
+                if (!hasValidCoordinate(selected)) return;
                 setSelectedDestination(selected);
-                if (location) {
-                  setRoutePoints(makeRoutePoints({ latitude: location.latitude, longitude: location.longitude }, selected));
-                }
+                if (location) loadRealRoute({ latitude: location.latitude, longitude: location.longitude }, selected);
               }}>
                 <Text style={styles.cardTitle}>{item.name || item.hospital_name || item.title || 'สถานที่'}</Text>
                 <Text style={styles.muted}>{item.address || item.district || '—'}</Text>
@@ -1366,7 +1314,7 @@ function SafeRoute({ go, goBack, onHistory }) {
           </View>
         ) : null}
 
-        {riskResult ? (
+        {riskResult && routePoints.length >= 2 ? (
           <View style={styles.riskReport}>
             <View style={styles.scoreRow}>
               <Text style={styles.cardTitle}>Risk Score</Text>

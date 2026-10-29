@@ -10,25 +10,38 @@ jest.mock('../src/lib/supabase', () => ({
   supabaseConfig: { configured: false },
 }));
 
-describe('hospital fallback service', () => {
-  it('returns local sample hospital data when Supabase is not configured', async () => {
+describe('hospital service without Supabase', () => {
+  beforeEach(() => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [{
+        place_id: 123,
+        display_name: 'โรงพยาบาลจริง, เชียงใหม่',
+        type: 'hospital',
+        lat: '18.7883',
+        lon: '98.9853',
+      }],
+    });
+  });
+
+  it('searches real OpenStreetMap results with coordinates', async () => {
     const result = await searchHospitals('โรงพยาบาล');
 
     expect(result.error).toBeNull();
-    expect(Array.isArray(result.data)).toBe(true);
-    expect(result.data.length).toBeGreaterThan(0);
-    expect(result.data[0].name).toContain('โรงพยาบาล');
-    expect(result.data[0].source).toBe('SAMPLE');
+    expect(result.data[0]).toMatchObject({
+      name: 'โรงพยาบาลจริง',
+      latitude: 18.7883,
+      longitude: 98.9853,
+      source: 'NOMINATIM',
+    });
+    expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('nominatim.openstreetmap.org'), expect.any(Object));
   });
 
-  it('filters nearby sample data by radius and sorts by distance', async () => {
+  it('does not invent nearby places without a configured database', async () => {
     const result = await getNearbyHospitals(13.7500, 100.5650, 1);
 
-    expect(result.error).toBeNull();
-    expect(result.data).toHaveLength(2);
-    expect(result.data[0].id).toBe('sample-hospital-central');
-    expect(result.data[0].distance_km).toBeCloseTo(0);
-    expect(result.data[1].distance_km).toBeGreaterThan(result.data[0].distance_km);
+    expect(result.data).toEqual([]);
+    expect(result.error).toBeInstanceOf(Error);
   });
 
   it('rejects invalid coordinates and search radius', async () => {
@@ -41,14 +54,14 @@ describe('hospital fallback service', () => {
     expect(invalidRadius.error).toBeInstanceOf(Error);
   });
 
-  it('returns a sample record only for its explicit ID', async () => {
+  it('does not return a fabricated record by ID', async () => {
     const found = await getHospitalById('sample-clinic');
     const missing = await getHospitalById('unknown-id');
 
-    expect(found.data.name).toBe('คลินิกตัวอย่าง');
-    expect(found.error).toBeNull();
+    expect(found.data).toBeNull();
+    expect(found.error).toBeInstanceOf(Error);
     expect(missing.data).toBeNull();
-    expect(missing.error).toBeNull();
+    expect(missing.error).toBeInstanceOf(Error);
   });
 });
 

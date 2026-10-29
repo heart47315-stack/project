@@ -36,7 +36,11 @@ function normalizeCoordinate(coordinate) {
   if (
     !coordinate ||
     !Number.isFinite(Number(coordinate.latitude)) ||
-    !Number.isFinite(Number(coordinate.longitude))
+    !Number.isFinite(Number(coordinate.longitude)) ||
+    Number(coordinate.latitude) < -90 ||
+    Number(coordinate.latitude) > 90 ||
+    Number(coordinate.longitude) < -180 ||
+    Number(coordinate.longitude) > 180
   ) {
     return null;
   }
@@ -48,8 +52,8 @@ function normalizeCoordinate(coordinate) {
 }
 
 function getDefaultCenter() {
-  // ค่าเริ่มต้นสำรองสำหรับกรุงเทพฯ
-  return [13.7563, 100.5018];
+  // ไม่มีตำแหน่งเริ่มต้นปลอม: ใช้จุดกลางโลกจนกว่าจะมี GPS จริง
+  return [0, 0];
 }
 
 function getCenter(region) {

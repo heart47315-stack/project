@@ -1,32 +1,7 @@
 import { supabase, supabaseConfig } from '../lib/supabase';
 
-const hospitalFallbackList = [
-  {
-    id: 'sample-hospital-central',
-    name: 'โรงพยาบาลศูนย์กลาง',
-    type: 'โรงพยาบาล',
-    address: '123 ถนนตัวอย่าง แขวงพญาไท',
-    province: 'กรุงเทพมหานคร',
-    district: 'พญาไท',
-    latitude: 13.7500,
-    longitude: 100.5650,
-    phone: '02-XXX-XXXX',
-    source: 'SAMPLE',
-  },
-  {
-    id: 'sample-clinic',
-    name: 'คลินิกตัวอย่าง',
-    type: 'คลินิก',
-    address: '456 ซอยตัวอย่าง เขตราชเทวี',
-    province: 'กรุงเทพมหานคร',
-    district: 'ราชเทวี',
-    latitude: 13.7468,
-    longitude: 100.5678,
-    phone: '02-YYY-YYYY',
-    source: 'SAMPLE',
-  },
-];
 const HOSPITALS_PAGE_SIZE = 1000;
+const NOMINATIM_TIMEOUT_MS = 10000;
 
 function normalizeText(value) {
   return String(value ?? '').trim().toLocaleLowerCase();
@@ -113,6 +88,67 @@ function getError(error, fallbackMessage) {
   return new Error(fallbackMessage);
 }
 
+function createServiceError(message, code, cause) {
+  const error = new Error(message);
+  error.code = code;
+  if (cause) error.cause = cause;
+  return error;
+}
+
+async function searchOpenStreetMap(query) {
+  const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=10&accept-language=th&q=${encodeURIComponent(query)}`;
+  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timeout = controller ? setTimeout(() => controller.abort(), NOMINATIM_TIMEOUT_MS) : null;
+
+  try {
+    const response = await fetch(url, {
+      headers: { Accept: 'application/json', 'User-Agent': 'MedSafeAI/1.1 (SafeRoute)' },
+      ...(controller ? { signal: controller.signal } : {}),
+    });
+
+    if (!response.ok) {
+      throw createServiceError('บริการค้นหาสถานที่จาก OpenStreetMap ขัดข้อง', 'nominatim-http-error');
+    }
+
+    const places = await response.json();
+
+    return (Array.isArray(places) ? places : []).map((place) => {
+      const latitude = getCoordinate(place.lat);
+      const longitude = getCoordinate(place.lon);
+      if (!isValidCoordinates(latitude, longitude)) return null;
+
+      return {
+        id: `nominatim-${place.place_id}`,
+        name: place.display_name?.split(',')[0] || 'สถานที่จาก OpenStreetMap',
+        title: place.display_name?.split(',')[0] || 'สถานที่จาก OpenStreetMap',
+        address: place.display_name || '',
+        type: place.type || place.class || '',
+        latitude,
+        longitude,
+        source: 'NOMINATIM',
+      };
+    }).filter(Boolean);
+  } catch (error) {
+    if (error?.name === 'AbortError' || error?.code === 'ABORT_ERR') {
+      throw createServiceError('บริการค้นหาสถานที่ใช้เวลานานเกินไป กรุณาลองใหม่', 'nominatim-timeout', error);
+    }
+    throw error?.code ? error : createServiceError('ไม่สามารถเชื่อมต่อบริการค้นหาสถานที่ได้', 'nominatim-unavailable', error);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+}
+
+async function searchNominatimWithStatus(query) {
+  try {
+    return { data: await searchOpenStreetMap(query), error: null };
+  } catch (error) {
+    return {
+      data: [],
+      error: getError(error, 'ไม่สามารถค้นหาสถานที่ได้'),
+    };
+  }
+}
+
 async function getHospitalsFromTable() {
   const hospitals = [];
   let offset = 0;
@@ -141,10 +177,7 @@ export async function searchHospitals(query = '') {
   const searchQuery = String(query ?? '').trim();
 
   if (!supabase || !supabaseConfig?.configured) {
-    return {
-      data: filterHospitals(hospitalFallbackList, searchQuery),
-      error: null,
-    };
+    return searchNominatimWithStatus(searchQuery);
   }
 
   try {
@@ -153,10 +186,9 @@ export async function searchHospitals(query = '') {
     });
 
     if (!error) {
-      return {
-        data: Array.isArray(data) ? data : [],
-        error: null,
-      };
+      if (Array.isArray(data) && data.length > 0) {
+        return { data, error: null };
+      }
     }
   } catch {
     // Fall back to a table query when the RPC is unavailable.
@@ -164,16 +196,14 @@ export async function searchHospitals(query = '') {
 
   try {
     const hospitals = await getHospitalsFromTable();
-    return {
-      data: filterHospitals(hospitals, searchQuery),
-      error: null,
-    };
-  } catch (error) {
-    return {
-      data: [],
-      error: getError(error, 'ไม่สามารถค้นหาข้อมูลโรงพยาบาลได้'),
-    };
-  }
+    const matches = filterHospitals(hospitals, searchQuery);
+    if (matches.length > 0) return { data: matches, error: null };
+  } catch {}
+
+  // รองรับร้านขายยา/สถานพยาบาลที่ไม่อยู่ในตาราง hospitals
+  const nominatimResult = await searchNominatimWithStatus(searchQuery);
+  if (nominatimResult.error) return nominatimResult;
+  return nominatimResult;
 }
 
 /**
@@ -199,10 +229,7 @@ export async function getNearbyHospitals(latitude, longitude, radiusKm = 20) {
   }
 
   if (!supabase || !supabaseConfig?.configured) {
-    return {
-      data: findNearbyHospitals(hospitalFallbackList, userLat, userLng, radius),
-      error: null,
-    };
+    return { data: [], error: new Error('ยังไม่สามารถค้นหาสถานที่ใกล้เคียงโดยไม่มีฐานข้อมูลได้') };
   }
 
   try {
@@ -249,10 +276,7 @@ export async function getHospitalById(hospitalId) {
   }
 
   if (!supabase || !supabaseConfig?.configured) {
-    return {
-      data: hospitalFallbackList.find((hospital) => hospital.id === id) || null,
-      error: null,
-    };
+    return { data: null, error: new Error('ไม่พบข้อมูลสถานที่ในฐานข้อมูล') };
   }
 
   try {

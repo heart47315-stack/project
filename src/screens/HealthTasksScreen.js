@@ -111,6 +111,20 @@ async function scheduleMissingNotifications(rows, reminderBody) {
   const scheduled = [];
 
   try {
+    if (Notifications.supportsAndroidNotificationChannels()) {
+      const channel = await Notifications.setAndroidNotificationChannel(
+        'reminders',
+        {
+          name: 'Reminders',
+          importance: Notifications.AndroidImportance.DEFAULT,
+        }
+      );
+
+      if (!channel) {
+        throw new Error('Could not create the Android reminders channel.');
+      }
+    }
+
     const permission = await Notifications.getPermissionsAsync();
 
     if (!permission.granted) {
@@ -142,15 +156,15 @@ async function scheduleMissingNotifications(rows, reminderBody) {
         content: {
           title: row.title,
           body: row.description || reminderBody,
-          channelId: 'reminders',
           data: {
-            healthTaskId: row.id,
+            ...(row.id ? { healthTaskId: row.id } : {}),
             seriesId: row.series_id,
           },
         },
         trigger: {
           type: Notifications.SchedulableTriggerInputTypes.DATE,
           date: triggerDate,
+          channelId: 'reminders',
         },
       });
 
@@ -581,12 +595,12 @@ export default function HealthTasksScreen({
             content: {
               title: task.title,
               body: task.description || t('task_taskReminderBody'),
-              channelId: 'reminders',
               data: { healthTaskId: task.id },
             },
             trigger: {
               type: Notifications.SchedulableTriggerInputTypes.DATE,
               date: triggerDate,
+              channelId: 'reminders',
             },
           });
       }

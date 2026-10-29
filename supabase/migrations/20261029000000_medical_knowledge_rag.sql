@@ -39,20 +39,13 @@ create index if not exists medical_knowledge_embedding_idx
 create index if not exists medical_knowledge_status_idx
   on public.medical_knowledge (status);
 
-do $$
-begin
-  if not exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'medical_knowledge'
-      and policyname = 'Authenticated users can read approved medical knowledge'
-  ) then
-    create policy "Authenticated users can read approved medical knowledge"
-      on public.medical_knowledge
-      for select to authenticated
-      using (status = 'approved');
-  end if;
-end $$;
+drop policy if exists "Authenticated users can read approved medical knowledge" on public.medical_knowledge;
+create policy "Authenticated users can read approved medical knowledge"
+  on public.medical_knowledge
+  for select to authenticated
+  using (status = 'approved' and approved_by is not null and approved_at is not null);
+
+grant select on table public.medical_knowledge to authenticated;
 
 create or replace function public.match_medical_knowledge(
   query_embedding extensions.vector(1536),
@@ -85,10 +78,12 @@ as $$
     (1 - (mk.embedding <=> query_embedding))::real as similarity
   from public.medical_knowledge as mk
   where mk.status = 'approved'
+    and mk.approved_by is not null
+    and mk.approved_at is not null
     and mk.embedding is not null
-    and (1 - (mk.embedding <=> query_embedding)) >= greatest(0, least(match_threshold, 1))
+    and (1 - (mk.embedding <=> query_embedding)) >= greatest(0, least(coalesce(match_threshold, 0.62), 1))
   order by mk.embedding <=> query_embedding
-  limit greatest(1, least(match_count, 20));
+  limit greatest(1, least(coalesce(match_count, 6), 20));
 $$;
 
 revoke all on function public.match_medical_knowledge(extensions.vector(1536), real, integer) from public, anon;

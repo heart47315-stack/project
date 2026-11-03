@@ -13,7 +13,14 @@
     "test": "jest --runInBand",
     "typecheck": "tsc --noEmit",
     "validate:finetune": "node scripts/validate-finetune-dataset.mjs",
-    "split:finetune": "node scripts/split-finetune-dataset.mjs"
+    "split:finetune": "node scripts/split-finetune-dataset.mjs",
+    "medical": "node scripts/medical-training.mjs",
+    "medical:validate": "node scripts/validate-medical-data.mjs dataset/medicines.json",
+    "medical:import": "node scripts/import-medical-knowledge.mjs dataset/medicines.json",
+    "medical:import:apply": "node scripts/import-medical-knowledge.mjs dataset/medicines.json --apply",
+    "medical:import:dry-run": "node scripts/import-medical-knowledge.mjs dataset/medicines.json",
+    "medical:test": "node scripts/test-medical-rag.mjs",
+    "medical:test:live": "node scripts/test-medical-rag.mjs --live"
   },
   "jest": {
     "preset": "jest-expo",
@@ -29,6 +36,7 @@
     "@supabase/server": "^1.4.1",
     "@supabase/supabase-js": "^2.112.3",
     "babel-preset-expo": "~54.0.10",
+    "dotenv": "^18.0.9",
     "expo": "^54.0.0",
     "expo-asset": "~12.0.13",
     "expo-auth-session": "~7.0.11",

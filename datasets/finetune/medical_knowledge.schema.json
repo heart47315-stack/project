@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MedSafe Medical Knowledge Fine-tuning Candidate",
+  "type": "object",
+  "required": ["instruction", "input", "expected_output", "source", "reviewer", "approval_status"],
+  "properties": {
+    "instruction": { "type": "string", "minLength": 1 },
+    "input": { "type": "string", "minLength": 1 },
+    "expected_output": { "type": "string", "minLength": 1 },
+    "source": { "type": "string", "minLength": 1 },
+    "reviewer": { "type": ["string", "null"] },
+    "approval_status": { "enum": ["draft", "pending", "approved", "rejected"] },
+    "split": { "enum": ["train", "validation", "test"] },
+    "contains_phi": { "type": "boolean" },
+    "example_id": { "type": "string" }
+  },
+  "additionalProperties": true
+}

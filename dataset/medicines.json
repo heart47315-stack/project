@@ -1,0 +1,40 @@
+[
+  {
+    "drug_name": "Paracetamol",
+    "generic_name": "Paracetamol",
+    "trade_names": [],
+    "active_ingredient": "Paracetamol",
+    "category": "Analgesic",
+    "dosage_form": null,
+    "indications": "บรรเทาอาการปวดและลดไข้",
+    "side_effects": "อาจเกิดอาการแพ้ยา",
+    "contraindications": "ผู้ที่แพ้ตัวยาสำคัญ",
+    "warnings": "ระวังการได้รับยาซ้ำและความเสี่ยงต่อตับ",
+    "interactions": "ควรตรวจสอบยาที่ใช้ร่วมกัน",
+    "precautions": "ควรตรวจสอบยาที่ใช้ร่วมกันและปฏิบัติตามเอกสารกำกับยา",
+    "source": "เอกสารกำกับยาที่ผ่านการตรวจสอบ",
+    "source_url": null,
+    "reviewed_at": null,
+    "approval_status": "pending",
+    "verified": false
+  },
+  {
+    "drug_name": "Ibuprofen",
+    "generic_name": "Ibuprofen",
+    "trade_names": [],
+    "active_ingredient": "Ibuprofen",
+    "category": "NSAID",
+    "dosage_form": null,
+    "indications": "บรรเทาอาการปวดและลดการอักเสบ",
+    "side_effects": "อาจระคายเคืองทางเดินอาหาร",
+    "contraindications": "ผู้ที่แพ้ยาในกลุ่ม NSAIDs",
+    "warnings": "ระวังความเสี่ยงต่อกระเพาะอาหารและไต",
+    "interactions": "อาจมีปฏิกิริยากับยาต้านการแข็งตัวของเลือด",
+    "precautions": "ควรตรวจสอบยาที่ใช้ร่วมกันและปฏิบัติตามเอกสารกำกับยา",
+    "source": "เอกสารกำกับยาที่ผ่านการตรวจสอบ",
+    "source_url": null,
+    "reviewed_at": null,
+    "approval_status": "pending",
+    "verified": false
+  }
+]

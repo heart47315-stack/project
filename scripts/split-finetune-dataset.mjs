@@ -18,8 +18,13 @@ const seen = new Set();
 for (const [index, line] of fs.readFileSync(inputPath, 'utf8').split(/\r?\n/).filter(Boolean).entries()) {
   let row;
   try { row = JSON.parse(line); } catch { throw new Error(`line ${index + 1}: invalid JSON`); }
-  if (!Array.isArray(row.messages) || !row.messages.some((message) => message.role === 'user') || !row.messages.some((message) => message.role === 'assistant')) throw new Error(`line ${index + 1}: messages must include user and assistant`);
-  if (row.metadata?.expert_reviewed !== true || row.metadata?.contains_phi !== false) throw new Error(`line ${index + 1}: requires expert_reviewed=true and contains_phi=false`);
+  const structured = ['instruction', 'input', 'expected_output', 'source', 'reviewer', 'approval_status'].every((field) => Object.hasOwn(row, field));
+  if (structured) {
+    if (row.approval_status !== 'approved' || !row.reviewer) throw new Error(`line ${index + 1}: structured records require approval_status=approved and reviewer`);
+  } else {
+    if (!Array.isArray(row.messages) || !row.messages.some((message) => message.role === 'user') || !row.messages.some((message) => message.role === 'assistant')) throw new Error(`line ${index + 1}: messages must include user and assistant`);
+    if (row.metadata?.expert_reviewed !== true || row.metadata?.contains_phi !== false) throw new Error(`line ${index + 1}: requires expert_reviewed=true and contains_phi=false`);
+  }
   const serialized = JSON.stringify(row);
   if (piiPatterns.some((pattern) => pattern.test(serialized))) throw new Error(`line ${index + 1}: possible personal data detected`);
   const fingerprint = crypto.createHash('sha256').update(serialized).digest('hex');

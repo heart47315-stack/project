@@ -13,12 +13,19 @@ for (const [index, line] of lines.entries()) {
   const lineNumber = index + 1;
   let row;
   try { row = JSON.parse(line); } catch { errors.push(`line ${lineNumber}: invalid JSON`); continue; }
-  if (!Array.isArray(row.messages) || row.messages.length < 2) errors.push(`line ${lineNumber}: messages must contain at least one user and one assistant message`);
-  const roles = row.messages?.map((message) => message?.role);
-  if (!roles?.includes('user') || !roles?.includes('assistant')) errors.push(`line ${lineNumber}: messages must include user and assistant roles`);
-  for (const message of row.messages || []) {
-    if (!['system', 'user', 'assistant'].includes(message?.role)) errors.push(`line ${lineNumber}: unsupported message role`);
-    if (typeof message?.content !== 'string' || !message.content.trim()) errors.push(`line ${lineNumber}: message content must be non-empty text`);
+  const structured = ['instruction', 'input', 'expected_output', 'source', 'reviewer', 'approval_status'].every((field) => Object.hasOwn(row, field));
+  if (structured) {
+    for (const field of ['instruction', 'input', 'expected_output', 'source']) if (typeof row[field] !== 'string' || !row[field].trim()) errors.push(`line ${lineNumber}: ${field} must be non-empty text`);
+    if (row.approval_status !== 'approved') errors.push(`line ${lineNumber}: approval_status must be approved`);
+    if (typeof row.reviewer !== 'string' || !row.reviewer.trim()) errors.push(`line ${lineNumber}: reviewer is required`);
+  } else {
+    if (!Array.isArray(row.messages) || row.messages.length < 2) errors.push(`line ${lineNumber}: messages must contain at least one user and one assistant message`);
+    const roles = row.messages?.map((message) => message?.role);
+    if (!roles?.includes('user') || !roles?.includes('assistant')) errors.push(`line ${lineNumber}: messages must include user and assistant roles`);
+    for (const message of row.messages || []) {
+      if (!['system', 'user', 'assistant'].includes(message?.role)) errors.push(`line ${lineNumber}: unsupported message role`);
+      if (typeof message?.content !== 'string' || !message.content.trim()) errors.push(`line ${lineNumber}: message content must be non-empty text`);
+    }
   }
   const id = row.metadata?.example_id;
   if (id && seen.has(id)) errors.push(`line ${lineNumber}: duplicate metadata.example_id ${id}`);

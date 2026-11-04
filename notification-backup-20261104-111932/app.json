@@ -1,0 +1,28 @@
+{
+  "expo": {
+    "name": "MEDSAFE AI",
+    "slug": "medsafe-ai",
+    "scheme": "medsafeai",
+    "version": "1.1.0",
+    "runtimeVersion": "1.0.0",
+    "android": {
+      "package": "com.medsafeai.app"
+    },
+    "web": {
+      "output": "single",
+      "bundler": "metro"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "faf23790-fddd-4b0b-901e-a55720bceef8"
+      }
+    },
+    "updates": {
+      "url": "https://u.expo.dev/faf23790-fddd-4b0b-901e-a55720bceef8"
+    },
+    "plugins": [
+      "@react-native-community/datetimepicker",
+      "expo-web-browser"
+    ]
+  }
+}

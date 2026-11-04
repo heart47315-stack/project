@@ -23,3 +23,32 @@ describe('notification API bindings', () => {
     expect(typeof Notifications.setAndroidNotificationChannel).toBe('function');
   });
 });
+
+describe('notification scheduling helpers', () => {
+  it('uses the new Android channel and keeps the legacy channel untouched', () => {
+    expect(Notifications.NOTIFICATION_CHANNEL_ID).toBe('medsafe-reminders-v2');
+    expect(Notifications.LEGACY_NOTIFICATION_CHANNEL_ID).toBe('reminders');
+    expect(Notifications.ANDROID_NOTIFICATION_CHANNEL.sound).toBe('default');
+    expect(Notifications.ANDROID_NOTIFICATION_CHANNEL.enableVibrate).toBe(true);
+    expect(Notifications.ANDROID_NOTIFICATION_CHANNEL.importance).toBe(
+      Notifications.AndroidImportance.HIGH
+    );
+  });
+
+  it('parses Thailand local date/time without UTC conversion', () => {
+    const value = Notifications.parseLocalDateTime('2026-11-05', '08:30');
+    expect(value.getFullYear()).toBe(2026);
+    expect(value.getMonth()).toBe(10);
+    expect(value.getDate()).toBe(5);
+    expect(value.getHours()).toBe(8);
+    expect(value.getMinutes()).toBe(30);
+  });
+
+  it('builds all supported repeat trigger types', () => {
+    const date = Notifications.parseLocalDateTime('2026-11-05', '08:30');
+    expect(Notifications.buildNotificationTrigger({ date, repeat: 'none' }).date).toBe(date);
+    expect(Notifications.buildNotificationTrigger({ date, repeat: 'daily' }).hour).toBe(8);
+    expect(Notifications.buildNotificationTrigger({ date, repeat: 'weekly' }).weekday).toBe(4);
+    expect(Notifications.buildNotificationTrigger({ date, repeat: 'monthly' }).day).toBe(5);
+  });
+});

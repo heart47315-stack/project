@@ -1,0 +1,38 @@
+{
+  "cli": {
+    "version": ">= 22.0.0",
+    "appVersionSource": "local"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal"
+    },
+    "preview": {
+      "distribution": "internal",
+      "channel": "preview",
+      "environment": "preview",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://ymhlnsfgutmfczsezpnk.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_kzS0XLT9bhyHuttghJaNMg__6uXtYju"
+      }
+    },
+    "production": {
+      "distribution": "store",
+      "autoIncrement": false,
+      "channel": "production",
+      "environment": "production",
+      "env": {
+        "EXPO_USE_COMMUNITY_AUTOLINKING": "1",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://ymhlnsfgutmfczsezpnk.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_kzS0XLT9bhyHuttghJaNMg__6uXtYju"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}

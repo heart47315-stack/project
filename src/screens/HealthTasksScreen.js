@@ -111,21 +111,8 @@ async function scheduleMissingNotifications(rows, reminderBody) {
   const scheduled = [];
 
   try {
-    if (Notifications.supportsAndroidNotificationChannels()) {
-      const channel = await Notifications.setAndroidNotificationChannel(
-        'reminders',
-        {
-          name: 'Reminders',
-          importance: Notifications.AndroidImportance.DEFAULT,
-        }
-      );
-
-      if (!channel) {
-        throw new Error('Could not create the Android reminders channel.');
-      }
-    }
-
-    const permission = await Notifications.getPermissionsAsync();
+    await Notifications.configureLocalNotifications();
+    const permission = await Notifications.requestNotificationPermissions();
 
     if (!permission.granted) {
       return {
@@ -135,16 +122,34 @@ async function scheduleMissingNotifications(rows, reminderBody) {
     }
 
     const existing = await Notifications.getAllScheduledNotificationsAsync();
-    const available = Math.max(0, 50 - existing.length);
+    const existingByTaskId = new Map(
+      existing
+        .map((notification) => [
+          notification.content?.data?.healthTaskId,
+          notification.identifier,
+        ])
+        .filter(([taskId]) => taskId)
+    );
+    const available = Math.max(
+      0,
+      Notifications.MAX_SCHEDULED_NOTIFICATIONS - existing.length
+    );
+    let scheduledCount = 0;
 
-    for (const [index, row] of rows.entries()) {
-      if (index >= available) {
+    for (const row of rows) {
+      const existingId = row.id && existingByTaskId.get(row.id);
+      if (existingId) {
+        scheduled.push({ ...row, notification_id: existingId });
+        continue;
+      }
+      if (scheduledCount >= available) {
         scheduled.push({ ...row, notification_id: null });
         continue;
       }
 
-      const triggerDate = new Date(
-        `${row.task_date}T${row.task_time || '09:00'}:00`
+      const triggerDate = Notifications.parseLocalDateTime(
+        row.task_date,
+        row.task_time || '09:00'
       );
 
       if (!Number.isFinite(triggerDate.getTime()) || triggerDate <= new Date()) {
@@ -160,14 +165,16 @@ async function scheduleMissingNotifications(rows, reminderBody) {
             ...(row.id ? { healthTaskId: row.id } : {}),
             seriesId: row.series_id,
           },
+          sound: 'default',
+          channelId: Notifications.NOTIFICATION_CHANNEL_ID,
         },
         trigger: {
           type: Notifications.SchedulableTriggerInputTypes.DATE,
           date: triggerDate,
-          channelId: 'reminders',
         },
       });
 
+      scheduledCount += 1;
       scheduled.push({ ...row, notification_id: notificationId });
     }
 
@@ -566,15 +573,16 @@ export default function HealthTasksScreen({
 
     try {
       if (enabled) {
-        const permission = await Notifications.requestPermissionsAsync();
+        const permission = await Notifications.requestNotificationPermissions();
 
         if (!permission.granted) {
           setError(t('notificationPermission'));
           return;
         }
 
-        const triggerDate = new Date(
-          `${task.task_date}T${task.task_time || '09:00'}:00`
+        const triggerDate = Notifications.parseLocalDateTime(
+          task.task_date,
+          task.task_time || '09:00'
         );
 
         if (triggerDate <= new Date()) {
@@ -585,7 +593,10 @@ export default function HealthTasksScreen({
         const pendingCount =
           await Notifications.getAllScheduledNotificationsAsync();
 
-        if (pendingCount.length >= 50) {
+        if (
+          pendingCount.length >= Notifications.MAX_SCHEDULED_NOTIFICATIONS &&
+          !task.notification_id
+        ) {
           setError(t('notificationCapacity'));
           return;
         }
@@ -596,11 +607,12 @@ export default function HealthTasksScreen({
               title: task.title,
               body: task.description || t('task_taskReminderBody'),
               data: { healthTaskId: task.id },
+              sound: 'default',
+              channelId: Notifications.NOTIFICATION_CHANNEL_ID,
             },
             trigger: {
               type: Notifications.SchedulableTriggerInputTypes.DATE,
               date: triggerDate,
-              channelId: 'reminders',
             },
           });
       }
@@ -737,7 +749,7 @@ export default function HealthTasksScreen({
                 enabled: true,
               },
             ],
-            () => Notifications.requestPermissionsAsync(),
+            () => Notifications.requestNotificationPermissions(),
             (rows) =>
               scheduleMissingNotifications(rows, t('task_taskReminderBody'))
           );
@@ -893,7 +905,7 @@ export default function HealthTasksScreen({
       if (draft.reminder) {
         const reminder = await prepareTaskReminders(
           rows,
-          () => Notifications.requestPermissionsAsync(),
+          () => Notifications.requestNotificationPermissions(),
           (reminderRows) =>
             scheduleMissingNotifications(
               reminderRows,

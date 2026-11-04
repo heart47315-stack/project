@@ -1455,13 +1455,13 @@ function Reminders({ go, goBack, userId }) {
 
     let notificationId;
     try {
-      const permission = await Notifications.requestPermissionsAsync();
+      const permission = await Notifications.requestNotificationPermissions();
       if (!permission.granted) {
         setError(t('notificationPermission'));
         return;
       }
 
-      const when = new Date(`${date}T${time}:00`);
+      const when = Notifications.parseLocalDateTime(date, time);
       if (Number.isNaN(when.getTime()) || (repeat === 'none' && when <= new Date())) {
         setError(t('reminderTimeInvalid'));
         return;
@@ -1471,16 +1471,22 @@ function Reminders({ go, goBack, userId }) {
         await Notifications.cancelScheduledNotificationAsync(editing.notification_id);
       }
 
-      const trigger = repeat === 'daily'
-        ? { type: Notifications.SchedulableTriggerInputTypes.DAILY, hour: when.getHours(), minute: when.getMinutes() }
-        : repeat === 'weekly'
-          ? { type: Notifications.SchedulableTriggerInputTypes.WEEKLY, weekday: when.getDay() || 7, hour: when.getHours(), minute: when.getMinutes() }
-          : repeat === 'monthly'
-            ? { type: Notifications.SchedulableTriggerInputTypes.MONTHLY, day: when.getDate(), hour: when.getHours(), minute: when.getMinutes() }
-            : { type: Notifications.SchedulableTriggerInputTypes.DATE, date: when };
+      const existing = await Notifications.getAllScheduledNotificationsAsync();
+      if (!editing && existing.length >= Notifications.MAX_SCHEDULED_NOTIFICATIONS) {
+        setError(t('notificationCapacity'));
+        return;
+      }
+
+      const trigger = Notifications.buildNotificationTrigger({ date: when, repeat });
 
       notificationId = await Notifications.scheduleNotificationAsync({
-        content: { title: title.trim(), body: t('reminderNotice'), channelId: 'reminders' },
+        content: {
+          title: title.trim(),
+          body: t('reminderNotice'),
+          sound: 'default',
+          data: { reminderId: editing?.id || null },
+          channelId: Notifications.NOTIFICATION_CHANNEL_ID,
+        },
         trigger,
       });
 
@@ -1517,16 +1523,21 @@ function Reminders({ go, goBack, userId }) {
 
       let notification_id = null;
       if (!item.enabled) {
-        const dt = new Date(`${item.reminder_date}T${item.reminder_time}`);
-        const trigger = item.repeat_type === 'daily'
-          ? { type: Notifications.SchedulableTriggerInputTypes.DAILY, hour: dt.getHours(), minute: dt.getMinutes() }
-          : item.repeat_type === 'weekly'
-            ? { type: Notifications.SchedulableTriggerInputTypes.WEEKLY, weekday: dt.getDay() || 7, hour: dt.getHours(), minute: dt.getMinutes() }
-            : item.repeat_type === 'monthly'
-              ? { type: Notifications.SchedulableTriggerInputTypes.MONTHLY, day: dt.getDate(), hour: dt.getHours(), minute: dt.getMinutes() }
-              : { type: Notifications.SchedulableTriggerInputTypes.DATE, date: dt };
+        const dt = Notifications.parseLocalDateTime(item.reminder_date, item.reminder_time);
+        const existing = await Notifications.getAllScheduledNotificationsAsync();
+        if (existing.length >= Notifications.MAX_SCHEDULED_NOTIFICATIONS) {
+          setError(t('notificationCapacity'));
+          return;
+        }
+        const trigger = Notifications.buildNotificationTrigger({ date: dt, repeat: item.repeat_type });
         notification_id = await Notifications.scheduleNotificationAsync({
-          content: { title: item.title, body: t('reminderNotice'), channelId: 'reminders' },
+          content: {
+            title: item.title,
+            body: t('reminderNotice'),
+            sound: 'default',
+            data: { reminderId: item.id },
+            channelId: Notifications.NOTIFICATION_CHANNEL_ID,
+          },
           trigger,
         });
       }
@@ -1662,18 +1673,7 @@ export default function App() {
   const languageRef = useRef(language);
   languageRef.current = language;
   useEffect(() => {
-    Notifications.setNotificationHandlerSafely({
-      handleNotification: async () => ({
-        shouldShowBanner: true,
-        shouldShowList: true,
-        shouldPlaySound: true,
-        shouldSetBadge: false,
-      }),
-    });
-    Notifications.setAndroidNotificationChannel('reminders', {
-      name: 'Reminders',
-      importance: Notifications.AndroidImportance.DEFAULT,
-    });
+    Notifications.configureLocalNotifications();
   }, []);
   useEffect(() => {
     const checkForUpdates = async () => {

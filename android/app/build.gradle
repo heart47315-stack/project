@@ -105,18 +105,6 @@ android {
             keyPassword 'android'
         }
         release {
-            def keystorePath = '../../credentials/android/keystore.jks'
-            def keystorePassword = System.getenv('MEDSAFE_ANDROID_KEYSTORE_PASSWORD')
-            def keyAlias = '03746064e10caee0019155fe9a5233aa'
-
-            if ((!keystorePassword || keystorePassword.toString().trim().isEmpty()) && gradle.startParameter.taskNames.any { it.toLowerCase().contains('release') }) {
-                throw new GradleException('Release signing requires MEDSAFE_ANDROID_KEYSTORE_PASSWORD environment variable.')
-            }
-
-            storeFile file(keystorePath)
-            storePassword keystorePassword
-            keyAlias keyAlias
-            keyPassword keystorePassword
         }
     }
     buildTypes {

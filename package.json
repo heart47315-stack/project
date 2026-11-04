@@ -66,6 +66,7 @@
     "eslint": "^9.39.5",
     "eslint-config-expo": "~10.0.0",
     "jest-expo": "~54.0.18",
+    "qrcode": "^1.5.4",
     "supabase": "^2.122.0",
     "typescript": "~5.9.2"
   },

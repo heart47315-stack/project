@@ -1442,8 +1442,13 @@ function Settings({ go, goBack, userId, onLanguageChange }) {
   return <SafeAreaView style={styles.screen}><Header title={t('settings')} go={go} goBack={goBack} /><ScrollView contentContainerStyle={styles.content}>{loading ? <ActivityIndicator color={BLUE} /> : error ? <Text style={styles.errorBox}>{error}</Text> : <><View style={styles.settingRow}><Text style={styles.cardTitle}>{t('notifications')}</Text><Switch value={Boolean(settings?.notifications_enabled)} onValueChange={toggle} trackColor={{ true: '#A9C4FA' }} thumbColor={BLUE} /></View><Pressable style={styles.infoBlock} onPress={() => go('reminders')}><Text style={styles.cardTitle}>{t('reminders')}</Text></Pressable><View style={styles.infoBlock}><Text style={styles.cardTitle}>{t('language')}</Text><View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}><Pressable onPress={() => changeLanguage('th')} style={[styles.button, styles.buttonSecondary, { flex: 1, marginTop: 0 }, settings?.language === 'th' && styles.buttonDisabled]}><Text style={[styles.buttonTextSecondary, settings?.language === 'th' && { color: BLUE }]}>{t('thai')}</Text></Pressable><Pressable onPress={() => changeLanguage('en')} style={[styles.button, styles.buttonSecondary, { flex: 1, marginTop: 0 }, settings?.language === 'en' && styles.buttonDisabled]}><Text style={[styles.buttonTextSecondary, settings?.language === 'en' && { color: BLUE }]}>{t('english')}</Text></Pressable></View></View><Pressable style={styles.infoBlock} onPress={() => go('about')}><Text style={styles.cardTitle}>{t('about')}</Text></Pressable></>}</ScrollView></SafeAreaView>;
 }
 
+function getLocalDateInputValue() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+}
+
 function Reminders({ go, goBack, userId }) {
-  const { t } = useLocalizedText(); const [items, setItems] = useState([]); const [title, setTitle] = useState(''); const [date, setDate] = useState(new Date().toISOString().slice(0,10)); const [time, setTime] = useState('09:00'); const [type, setType] = useState('medication'); const [repeat, setRepeat] = useState('none'); const [editing, setEditing] = useState(null); const [error, setError] = useState('');
+  const { t } = useLocalizedText(); const [items, setItems] = useState([]); const [title, setTitle] = useState(''); const [date, setDate] = useState(getLocalDateInputValue); const [time, setTime] = useState('09:00'); const [type, setType] = useState('medication'); const [repeat, setRepeat] = useState('none'); const [editing, setEditing] = useState(null); const [error, setError] = useState('');
   const load = useCallback(async () => { const r = await getReminders(userId); if (r.error) setError(r.error.message); else setItems(r.data || []); }, [userId]);
   useEffect(() => { load(); }, [load]);
   const create = async () => {
@@ -1467,12 +1472,8 @@ function Reminders({ go, goBack, userId }) {
         return;
       }
 
-      if (editing?.notification_id) {
-        await Notifications.cancelScheduledNotificationAsync(editing.notification_id);
-      }
-
       const existing = await Notifications.getAllScheduledNotificationsAsync();
-      if (!editing && existing.length >= Notifications.MAX_SCHEDULED_NOTIFICATIONS) {
+      if (existing.length >= Notifications.MAX_SCHEDULED_NOTIFICATIONS && !editing?.notification_id) {
         setError(t('notificationCapacity'));
         return;
       }
@@ -1506,6 +1507,9 @@ function Reminders({ go, goBack, userId }) {
         await Notifications.cancelScheduledNotificationAsync(notificationId);
         setError(result.error.message);
       } else {
+        if (editing?.notification_id && editing.notification_id !== notificationId) {
+          await Notifications.cancelScheduledNotificationAsync(editing.notification_id);
+        }
         setTitle('');
         setEditing(null);
         await load();
@@ -1516,12 +1520,8 @@ function Reminders({ go, goBack, userId }) {
     }
   };
   const toggle = async (item) => {
+    let notification_id = null;
     try {
-      if (item.notification_id) {
-        await Notifications.cancelScheduledNotificationAsync(item.notification_id);
-      }
-
-      let notification_id = null;
       if (!item.enabled) {
         const dt = Notifications.parseLocalDateTime(item.reminder_date, item.reminder_time);
         const existing = await Notifications.getAllScheduledNotificationsAsync();
@@ -1547,8 +1547,15 @@ function Reminders({ go, goBack, userId }) {
         enabled: !item.enabled,
         notification_id,
       });
-      if (result.error) setError(result.error.message);
-      else await load();
+      if (result.error) {
+        if (notification_id) await Notifications.cancelScheduledNotificationAsync(notification_id);
+        setError(result.error.message);
+        return;
+      }
+      if (item.enabled && item.notification_id) {
+        await Notifications.cancelScheduledNotificationAsync(item.notification_id);
+      }
+      await load();
     } catch (notificationError) {
       console.error('[Reminders] Failed to update reminder notification', notificationError);
       setError(notificationError.message || t('notificationUnavailable'));
@@ -1708,6 +1715,10 @@ export default function App() {
   const [drugQuery, setDrugQuery] = useState('');
   const pendingRecoveryRef = useRef(false);
   const pendingConfirmationRef = useRef(false);
+  const pendingNotificationRouteRef = useRef(null);
+  const userRef = useRef(null);
+  const goRef = useRef(null);
+  userRef.current = user;
   const processedAuthUrlsRef = useRef(new Set());
   const oauthRedirectUrlRef = useRef(null);
 
@@ -1816,6 +1827,43 @@ export default function App() {
       return nextHistory;
     });
   };
+
+  goRef.current = go;
+
+  const routeFromNotification = useCallback((response) => {
+    const data = response?.notification?.request?.content?.data || {};
+    const target = data.healthTaskId ? 'healthTasks' : data.reminderId ? 'reminders' : null;
+    if (!target) return;
+    if (!userRef.current?.id) {
+      pendingNotificationRouteRef.current = target;
+      return;
+    }
+    pendingNotificationRouteRef.current = null;
+    goRef.current?.(target);
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    const subscription = Notifications.addNotificationResponseListener((response) => {
+      if (mounted) routeFromNotification(response);
+    });
+    Notifications.getLastNotificationResponseAsync()
+      .then((response) => {
+        if (mounted) routeFromNotification(response);
+      })
+      .catch((error) => console.warn('[Notifications] Failed to read notification response', error));
+    return () => {
+      mounted = false;
+      subscription?.remove?.();
+    };
+  }, [routeFromNotification]);
+
+  useEffect(() => {
+    if (!user?.id || !pendingNotificationRouteRef.current) return;
+    const target = pendingNotificationRouteRef.current;
+    pendingNotificationRouteRef.current = null;
+    goRef.current?.(target);
+  }, [user?.id]);
 
   const searchFromHome = (query) => {
     setDrugQuery(query.trim());

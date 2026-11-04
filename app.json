@@ -23,7 +23,9 @@
     "plugins": [
       "@react-native-community/datetimepicker",
       "expo-web-browser",
-      "expo-notifications"
+      ["expo-notifications", {
+        "permissions": ["POST_NOTIFICATIONS", "SCHEDULE_EXACT_ALARM", "VIBRATE"]
+      }]
     ]
   }
 }

@@ -15,12 +15,15 @@ describe('notification API bindings', () => {
     expect(typeof Notifications.getAllScheduledNotificationsAsync).toBe('function');
     expect(typeof Notifications.scheduleNotificationAsync).toBe('function');
     expect(typeof Notifications.cancelScheduledNotificationAsync).toBe('function');
+    expect(typeof Notifications.getLastNotificationResponseAsync).toBe('function');
+    expect(typeof Notifications.addNotificationResponseListener).toBe('function');
   });
 
   it('exports the permission and Android channel APIs as functions', () => {
     expect(typeof Notifications.getPermissionsAsync).toBe('function');
     expect(typeof Notifications.requestPermissionsAsync).toBe('function');
     expect(typeof Notifications.setAndroidNotificationChannel).toBe('function');
+    expect(typeof Notifications.isNotificationChannelSoundEnabled).toBe('function');
   });
 });
 

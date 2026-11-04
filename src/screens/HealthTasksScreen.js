@@ -164,6 +164,8 @@ async function scheduleMissingNotifications(rows, reminderBody) {
           data: {
             ...(row.id ? { healthTaskId: row.id } : {}),
             seriesId: row.series_id,
+            taskDate: row.task_date,
+            taskTime: row.task_time || '09:00',
           },
           sound: 'default',
           channelId: Notifications.NOTIFICATION_CHANNEL_ID,
@@ -606,7 +608,11 @@ export default function HealthTasksScreen({
             content: {
               title: task.title,
               body: task.description || t('task_taskReminderBody'),
-              data: { healthTaskId: task.id },
+              data: {
+                healthTaskId: task.id,
+                taskDate: task.task_date,
+                taskTime: task.task_time || '09:00',
+              },
               sound: 'default',
               channelId: Notifications.NOTIFICATION_CHANNEL_ID,
             },

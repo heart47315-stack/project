@@ -24,6 +24,7 @@ export const {
   scheduleNotificationAsync,
   cancelScheduledNotificationAsync,
   setNotificationChannelAsync,
+  getNotificationChannelAsync,
   setNotificationHandler,
   AndroidImportance,
   SchedulableTriggerInputTypes,
@@ -37,6 +38,20 @@ export async function getAllScheduledNotificationsAsync() {
   }
 
   return ExpoNotifications.getAllScheduledNotificationsAsync();
+}
+
+export async function getLastNotificationResponseAsync() {
+  if (typeof ExpoNotifications.getLastNotificationResponseAsync !== 'function') {
+    return null;
+  }
+  return ExpoNotifications.getLastNotificationResponseAsync();
+}
+
+export function addNotificationResponseListener(listener) {
+  if (typeof ExpoNotifications.addNotificationResponseReceivedListener !== 'function') {
+    return { remove: () => {} };
+  }
+  return ExpoNotifications.addNotificationResponseReceivedListener(listener);
 }
 
 export function isLocalNotificationsSupported() {
@@ -80,6 +95,19 @@ export async function configureLocalNotifications() {
   );
 }
 
+export async function getAndroidNotificationChannel() {
+  if (!supportsAndroidNotificationChannels() || typeof getNotificationChannelAsync !== 'function') {
+    return null;
+  }
+
+  try {
+    return await getNotificationChannelAsync(NOTIFICATION_CHANNEL_ID);
+  } catch (error) {
+    console.warn('Android notification channel lookup failed:', error);
+    return null;
+  }
+}
+
 export async function requestNotificationPermissions() {
   if (!isLocalNotificationsSupported()) {
     return { granted: false, status: 'undetermined' };
@@ -87,16 +115,30 @@ export async function requestNotificationPermissions() {
 
   await configureLocalNotifications();
   const current = await getPermissionsAsync();
-  if (current.granted) return current;
+  if (current.granted) {
+    return {
+      ...current,
+      channelSoundEnabled: await isNotificationChannelSoundEnabled(),
+    };
+  }
 
   // expo-notifications maps this request to POST_NOTIFICATIONS on Android 13+.
-  return requestPermissionsAsync({
+  const requested = await requestPermissionsAsync({
     android: {
       allowAlert: true,
       allowBadge: false,
       allowSound: true,
     },
   });
+  return {
+    ...requested,
+    channelSoundEnabled: await isNotificationChannelSoundEnabled(),
+  };
+}
+
+export async function isNotificationChannelSoundEnabled() {
+  const channel = await getAndroidNotificationChannel();
+  return channel ? channel.sound !== null : true;
 }
 
 export function parseLocalDateTime(dateValue, timeValue = '09:00') {

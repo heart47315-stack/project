@@ -11,5 +11,7 @@ describe('medical knowledge retrieval', () => {
   it('normalizes citation output safely', () => {
     expect(normalizeCitations([])).toEqual([]);
     expect(normalizeCitations(['Medical dataset reference'])).toEqual(['Medical dataset reference']);
+    expect(normalizeCitations([null, {}, '', { title: '', source: '' }, { title: 'Title', source: 'Source', url: 'https://example.test' }]))
+      .toEqual(['Title — Source — https://example.test']);
   });
 });

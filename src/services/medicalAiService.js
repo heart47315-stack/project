@@ -13,6 +13,32 @@ function getCitations(payload) {
   return normalizeCitations(raw);
 }
 
+function toHistory(history) {
+  const items = Array.isArray(history) ? history : [];
+  return items
+    .filter((item) => item && typeof item.text === 'string' && item.text.trim())
+    .slice(-12)
+    .map(({ me, text }) => ({
+      role: me ? 'user' : 'assistant',
+      content: text.slice(0, 4000),
+    }));
+}
+
+function getErrorStatus(error) {
+  return error?.context?.status || error?.status || error?.context?.response?.status || null;
+}
+
+async function invokeChat(accessToken, trimmedQuestion, history) {
+  return supabase.functions.invoke(FUNCTION_NAME, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: {
+      message: trimmedQuestion,
+      question: trimmedQuestion,
+      history: toHistory(history),
+    },
+  });
+}
+
 export async function sendMedicalQuestion(question, history = []) {
   const trimmedQuestion = String(question || '').trim();
   if (!trimmedQuestion) return { error: { message: 'กรุณาพิมพ์คำถามก่อนส่ง' } };
@@ -23,14 +49,16 @@ export async function sendMedicalQuestion(question, history = []) {
       return { error: { message: 'กรุณาเข้าสู่ระบบก่อนใช้งาน Medical AI' } };
     }
 
-    const { data: payload, error } = await supabase.functions.invoke(FUNCTION_NAME, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-      body: {
-        message: trimmedQuestion,
-        question: trimmedQuestion,
-        history: history.map(({ me, text }) => ({ role: me ? 'user' : 'assistant', content: text })),
-      },
-    });
+    let { data: payload, error } = await invokeChat(accessToken, trimmedQuestion, history);
+
+    if (error && getErrorStatus(error) === 401) {
+      const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
+      const refreshedToken = refreshed?.session?.access_token;
+      if (refreshError || !refreshedToken) {
+        return { error: { message: 'เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่ก่อนใช้งาน Medical AI' } };
+      }
+      ({ data: payload, error } = await invokeChat(refreshedToken, trimmedQuestion, history));
+    }
 
     if (error) {
       let message = error.message || 'ส่งคำถามไม่สำเร็จ';

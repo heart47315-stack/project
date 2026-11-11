@@ -677,23 +677,27 @@ function MedicalAI({ go, goBack, onHistory }) {
   const [msg, setMsg] = useState('');
   const [messages, setMessages] = useState([]);
   const [error, setError] = useState('');
+  const [lastFailedQuestion, setLastFailedQuestion] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const send = async () => {
-    if (!msg.trim()) return;
-    const question = msg.trim();
+  const send = async (retryQuestion = '') => {
+    if (loading) return;
+    const question = String(retryQuestion || msg).trim();
+    if (!question) return;
     const userMessage = { me: true, text: question };
     setMessages((currentMessages) => [...currentMessages, userMessage]);
     onHistory?.({ action_type: 'medical_ai', title: 'ใช้งาน Medical AI', description: question, metadata: { query: question } });
-    setMsg('');
+    if (!retryQuestion) setMsg('');
     setError('');
+    setLastFailedQuestion('');
     setLoading(true);
 
     const result = await sendMedicalQuestion(question, messages);
     if (result.error) {
       setError(result.error.message || 'ไม่สามารถส่งคำถามได้ กรุณาลองใหม่');
+      setLastFailedQuestion(question);
     } else {
-      setMessages((currentMessages) => [...currentMessages, { me: false, text: result.data.answer }]);
+      setMessages((currentMessages) => [...currentMessages, { me: false, text: result.data.answer, citations: result.data.citations || [] }]);
       onHistory?.({
         action_type: 'medical_ai',
         title: 'ใช้งาน Medical AI',
@@ -712,13 +716,22 @@ function MedicalAI({ go, goBack, onHistory }) {
     <SafeAreaView style={styles.screen}>
       <Header title={t('healthAI')} go={go} goBack={goBack} />
       <ScrollView style={styles.chatScroll} contentContainerStyle={styles.chat} keyboardShouldPersistTaps="handled">
-        {error ? <Text style={styles.errorBox}>{error}</Text> : null}
+        {error ? <View style={styles.errorBox}>
+          <Text style={styles.errorText}>{error}</Text>
+          {lastFailedQuestion ? <Pressable onPress={() => send(lastFailedQuestion)} disabled={loading}>
+            <Text style={styles.retryText}>ลองส่งอีกครั้ง</Text>
+          </Pressable> : null}
+        </View> : null}
         {messages.map((m, i) => (
           <View key={i} style={[styles.bubble, m.me ? styles.me : styles.ai]}>
             <Text style={m.me ? styles.meText : styles.text}>{m.text}</Text>
+            {!m.me && m.citations?.length ? <Text style={styles.citationText}>แหล่งอ้างอิง: {m.citations.join(' • ')}</Text> : null}
           </View>
         ))}
-        {loading ? <ActivityIndicator color={BLUE} style={{ alignSelf: 'flex-start', margin: 10 }} /> : null}
+        {loading ? <View style={styles.aiLoading}>
+          <ActivityIndicator color={BLUE} />
+          <Text style={styles.muted}>กำลังค้นหาความรู้และจัดทำคำตอบ...</Text>
+        </View> : null}
       </ScrollView>
       <View style={styles.composer}>
         <TextInput
@@ -735,7 +748,7 @@ function MedicalAI({ go, goBack, onHistory }) {
           textAlignVertical="top"
           style={styles.composerInput}
         />
-        <Pressable onPress={send} disabled={loading || !msg.trim()} style={[styles.send, (loading || !msg.trim()) && styles.buttonDisabled]}>
+        <Pressable onPress={() => send()} disabled={loading || !msg.trim()} style={[styles.send, (loading || !msg.trim()) && styles.buttonDisabled]}>
           <Ionicons name="send" color="#fff" size={18} />
         </Pressable>
       </View>
@@ -2161,7 +2174,7 @@ export default function App() {
       handleAuthUrl(url);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    const handleAuthStateChange = async (event, session) => {
       if (!mounted) return;
 
       try {
@@ -2180,6 +2193,16 @@ export default function App() {
           resetAuthState();
           Alert.alert(getLanguageText(languageRef.current, 'emailConfirmed'), getLanguageText(languageRef.current, 'emailConfirmedBody'));
           setAuthLoading(false);
+          return;
+        }
+
+        if (event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
+          if (session?.user) setUser(session.user);
+          setAuthLoading(false);
+          return;
+        }
+
+        if (event !== 'INITIAL_SESSION' && event !== 'SIGNED_IN' && event !== 'SIGNED_OUT') {
           return;
         }
 
@@ -2207,6 +2230,12 @@ export default function App() {
         Alert.alert(getLanguageText(languageRef.current, 'authLinkFailed'), getAuthErrorMessage(error));
         setAuthLoading(false);
       }
+    };
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      setTimeout(() => {
+        void handleAuthStateChange(event, session);
+      }, 0);
     });
 
     return () => {
@@ -2310,6 +2339,9 @@ const styles = StyleSheet.create({
   checkMark: { color: '#fff', fontSize: 13, fontWeight: '800', lineHeight: 13 },
   checkText: { color: DARK, fontSize: 14, fontWeight: '600', marginLeft: 10, flexShrink: 1 },
   errorBox: { backgroundColor: '#FFEAEA', borderColor: '#F2B4B4', borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, marginTop: 12, color: '#B12F2F', fontWeight: '600' },
+  errorText: { color: '#B12F2F', fontWeight: '600' },
+  retryText: { color: BLUE, fontWeight: '700', marginTop: 8 },
+  aiLoading: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 8, margin: 10 },
   home: { padding: 18, paddingBottom: 100 },
   homeHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   greeting: { fontSize: 20, fontWeight: '800', color: DARK },
@@ -2361,6 +2393,7 @@ const styles = StyleSheet.create({
   me: { alignSelf: 'flex-end', backgroundColor: BLUE },
   text: { color: DARK, fontSize: 13, lineHeight: 19 },
   meText: { color: '#fff', fontSize: 13, lineHeight: 19 },
+  citationText: { color: '#6B7F99', fontSize: 11, lineHeight: 16, marginTop: 8 },
   composer: { backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#E5ECF6', paddingHorizontal: 12, paddingVertical: 10, marginBottom: 68, flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
   composerInput: { flex: 1, minHeight: 42, maxHeight: 90, borderWidth: 1, borderColor: BORDER, borderRadius: 21, backgroundColor: '#F8FBFF', paddingHorizontal: 16, paddingVertical: 10, color: DARK, fontSize: 14 },
   send: { width: 40, height: 40, borderRadius: 20, backgroundColor: BLUE, alignItems: 'center', justifyContent: 'center' },

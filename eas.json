@@ -25,6 +25,9 @@
       "autoIncrement": false,
       "channel": "production",
       "environment": "production",
+      "android": {
+        "buildType": "app-bundle"
+      },
       "env": {
         "EXPO_USE_COMMUNITY_AUTOLINKING": "1",
         "EXPO_PUBLIC_SUPABASE_URL": "https://ymhlnsfgutmfczsezpnk.supabase.co",

@@ -60,7 +60,10 @@ export function normalizeCitations(citations = []) {
     .map((item) => {
       if (typeof item === 'string') return item.trim();
       if (item && typeof item === 'object') {
-        return item.title || item.citation || item.source || item.url || '';
+        const title = item.title || item.citation || '';
+        const source = item.source || '';
+        const url = item.url || item.source_url || '';
+        return [title, source && source !== title ? source : '', url].filter(Boolean).join(' — ');
       }
       return '';
     })

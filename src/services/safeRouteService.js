@@ -22,6 +22,7 @@ export async function fetchRouteBetween(origin, destination) {
 
   try {
     const url = `https://router.project-osrm.org/route/v1/driving/${from.longitude},${from.latitude};${to.longitude},${to.latitude}?overview=full&geometries=geojson&steps=false`;
+    console.log('[SafeRoute] OSRM request', url);
     const request = fetch(url, {
       ...(controller ? { signal: controller.signal } : {}),
     });
@@ -34,6 +35,7 @@ export async function fetchRouteBetween(origin, destination) {
       }, OSRM_TIMEOUT_MS);
     });
     const response = await Promise.race([request, timeoutPromise]);
+    console.log('[SafeRoute] OSRM response', response.status, response.ok);
     if (!response.ok) {
       return { ok: false, error: 'osrm-http-error', route: [] };
     }

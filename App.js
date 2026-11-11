@@ -1005,6 +1005,8 @@ function SafeRoute({ go, goBack, onHistory }) {
   const [error, setError] = useState('');
   const locationWatcherRef = useRef(null);
   const routeRequestIdRef = useRef(0);
+  const locationRef = useRef(null);
+  const selectedDestinationRef = useRef(null);
 
   const stopTracking = () => {
     if (locationWatcherRef.current) {
@@ -1017,6 +1019,10 @@ function SafeRoute({ go, goBack, onHistory }) {
     stopTracking();
     routeRequestIdRef.current += 1;
   }, []);
+
+  useEffect(() => {
+    selectedDestinationRef.current = selectedDestination;
+  }, [selectedDestination]);
 
   const hasValidCoordinate = (point) => {
     const latitude = Number(point?.latitude);
@@ -1034,7 +1040,18 @@ function SafeRoute({ go, goBack, onHistory }) {
     setRiskResult(null);
     setError('');
     setRouteLoading(true);
+    console.log('[SafeRoute] requesting OSRM route', {
+      origin,
+      destination,
+      coordinates: `${origin.longitude},${origin.latitude};${destination.longitude},${destination.latitude}`,
+    });
     const result = await fetchRouteBetween(origin, destination);
+    console.log('[SafeRoute] OSRM result', {
+      ok: result.ok,
+      error: result.error || null,
+      pointCount: result.route?.length || 0,
+      distanceKm: result.distanceKm ?? null,
+    });
 
     if (!isCurrentRouteRequest(requestId, routeRequestIdRef.current)) return null;
     setRouteLoading(false);
@@ -1069,12 +1086,14 @@ function SafeRoute({ go, goBack, onHistory }) {
     setRoutePoints([]);
     try {
       const providerStatus = await Location.getProviderStatusAsync();
+      console.log('[SafeRoute] location services', providerStatus.locationServicesEnabled);
       if (!providerStatus.locationServicesEnabled) {
         setError('กรุณาเปิด GPS/Location Services ของ Android ก่อนประเมินตำแหน่ง');
         return;
       }
 
       const permission = await Location.requestForegroundPermissionsAsync();
+      console.log('[SafeRoute] location permission', permission.status);
       if (permission.status !== 'granted') {
         setError('กรุณาอนุญาตสิทธิ์ Location เพื่อประเมินตำแหน่งปัจจุบัน');
         return;
@@ -1087,10 +1106,12 @@ function SafeRoute({ go, goBack, onHistory }) {
           mayShowUserSettingsDialog: true,
         });
         coords = current.coords;
+        console.log('[SafeRoute] current GPS position', coords);
       } catch {
         const lastKnown = await Location.getLastKnownPositionAsync();
         if (lastKnown?.coords) {
           coords = lastKnown.coords;
+          console.log('[SafeRoute] using last known GPS position', coords);
           setError('ใช้ตำแหน่งล่าสุดที่อุปกรณ์เคยเก็บไว้เนื่องจาก GPS ใช้เวลานาน');
         } else {
           throw new Error('gps unavailable');
@@ -1105,12 +1126,15 @@ function SafeRoute({ go, goBack, onHistory }) {
       const origin = { latitude: coords.latitude, longitude: coords.longitude };
       const safeAccuracy = Number.isFinite(coords.accuracy) ? coords.accuracy : null;
 
+      locationRef.current = { ...coords };
       setLocation(coords);
       setLocationAccuracy(safeAccuracy);
+      setError('');
       setRoutePoints([]);
 
-      if (selectedDestination) {
-        await loadRealRoute(origin, selectedDestination);
+      const latestDestination = selectedDestinationRef.current;
+      if (latestDestination) {
+        await loadRealRoute(origin, latestDestination);
       }
 
       stopTracking();
@@ -1133,11 +1157,13 @@ function SafeRoute({ go, goBack, onHistory }) {
             heading: nextCoords.heading,
             speed: nextCoords.speed,
           };
+          locationRef.current = nextLocation;
           setLocation(nextLocation);
           setLocationAccuracy(Number.isFinite(nextCoords.accuracy) ? nextCoords.accuracy : null);
 
-          if (selectedDestination) {
-            loadRealRoute({ latitude: nextCoords.latitude, longitude: nextCoords.longitude }, selectedDestination);
+          const latestDestination = selectedDestinationRef.current;
+          if (latestDestination) {
+            loadRealRoute({ latitude: nextCoords.latitude, longitude: nextCoords.longitude }, latestDestination);
           }
         }
       );
@@ -1189,11 +1215,13 @@ function SafeRoute({ go, goBack, onHistory }) {
           return;
         }
         setSelectedDestination(safeDestination);
-        if (!location) {
+        selectedDestinationRef.current = safeDestination;
+        const latestLocation = locationRef.current;
+        if (!latestLocation) {
           setError('กรุณาอนุญาตตำแหน่งปัจจุบันก่อนคำนวณเส้นทาง');
           return;
         }
-        const baseOrigin = { latitude: location.latitude, longitude: location.longitude };
+        const baseOrigin = { latitude: latestLocation.latitude, longitude: latestLocation.longitude };
 
         await loadRealRoute(baseOrigin, safeDestination);
 
@@ -1279,7 +1307,9 @@ function SafeRoute({ go, goBack, onHistory }) {
                 };
                 if (!hasValidCoordinate(selected)) return;
                 setSelectedDestination(selected);
-                if (location) loadRealRoute({ latitude: location.latitude, longitude: location.longitude }, selected);
+                selectedDestinationRef.current = selected;
+                const latestLocation = locationRef.current;
+                if (latestLocation) loadRealRoute({ latitude: latestLocation.latitude, longitude: latestLocation.longitude }, selected);
               }}>
                 <Text style={styles.cardTitle}>{item.name || item.hospital_name || item.title || 'สถานที่'}</Text>
                 <Text style={styles.muted}>{item.address || item.district || '—'}</Text>

@@ -6,7 +6,11 @@
     "version": "1.1.0",
     "runtimeVersion": "1.0.0",
     "android": {
-      "package": "com.medsafeai.app"
+      "package": "com.medsafeai.app",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ]
     },
     "web": {
       "output": "single",
@@ -22,6 +26,9 @@
     },
     "plugins": [
       "@react-native-community/datetimepicker",
+      ["expo-location", {
+        "locationAlwaysAndWhenInUsePermission": "อนุญาตให้ MEDSAFE AI เข้าถึงตำแหน่งของคุณเพื่อคำนวณเส้นทางปลอดภัย"
+      }],
       "expo-web-browser",
       ["expo-notifications", {
         "permissions": ["POST_NOTIFICATIONS", "SCHEDULE_EXACT_ALARM", "VIBRATE"]

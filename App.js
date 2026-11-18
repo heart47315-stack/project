@@ -115,6 +115,7 @@ function Button({ title, onPress, secondary = false, icon, loading = false, disa
   );
 }
 
+// หน้าเริ่มต้นของแอป แสดงโลโก้และพาผู้ใช้ไปยังขั้นตอนแนะนำการใช้งาน
 function Splash({ go }) {
   const { t } = useLocalizedText();
   return (
@@ -131,6 +132,7 @@ function Splash({ go }) {
   );
 }
 
+// หน้าแนะนำการใช้งาน 3 ขั้นตอน: Medical AI, ความปลอดภัยของยา และเส้นทางปลอดภัย
 function Onboarding({ go, step }) {
   const { t } = useLocalizedText();
   const data = {
@@ -162,6 +164,7 @@ function Onboarding({ go, step }) {
   );
 }
 
+// หน้าเข้าสู่ระบบด้วยอีเมลและรหัสผ่าน พร้อมทางเลือก OTP, Google และลืมรหัสผ่าน
 function Login({ go, onSubmit, onGoogleLogin, onForgot }) {
   const { t } = useLocalizedText();
   const [email, setEmail] = useState('');
@@ -247,6 +250,7 @@ function Login({ go, onSubmit, onGoogleLogin, onForgot }) {
   );
 }
 
+// หน้าเข้าสู่ระบบด้วยรหัส OTP ที่ส่งไปยังอีเมล และตรวจสอบรหัสก่อนยืนยันตัวตน
 function OtpLogin({ go, onVerified }) {
   const { t } = useLocalizedText();
   const [email, setEmail] = useState(''); const [otp, setOtp] = useState(''); const [busy, setBusy] = useState(false); const [message, setMessage] = useState(''); const [error, setError] = useState('');
@@ -276,6 +280,7 @@ function OtpLogin({ go, onVerified }) {
   return <SafeAreaView style={styles.screen}><ScrollView contentContainerStyle={styles.auth}><Header title={t('otpLogin')} go={go} backTarget="login" /><Text style={styles.label}>{t('email')}</Text><TextInput style={styles.input} keyboardType="email-address" autoCapitalize="none" value={email} onChangeText={setEmail} /><Text style={styles.label}>{t('otpCode')}</Text><TextInput style={styles.input} keyboardType="number-pad" maxLength={6} value={otp} onChangeText={setOtp} />{error ? <Text style={styles.errorBox}>{error}</Text> : null}{message ? <Text style={styles.successBox}>{message}</Text> : null}<Button title={t('sendOtp')} onPress={send} loading={busy} /><Button title={t('verifyOtp')} secondary onPress={verify} loading={busy} /><Button title={t('resendOtp')} secondary onPress={send} loading={busy} /></ScrollView></SafeAreaView>;
 }
 
+// หน้าสมัครสมาชิก รับข้อมูลบัญชีและข้อมูลสุขภาพเบื้องต้น พร้อมตรวจสอบเงื่อนไขก่อนส่ง
 function Register({ go, onSubmit }) {
   const { t } = useLocalizedText();
   const [fullName, setFullName] = useState('');
@@ -459,6 +464,7 @@ function Register({ go, onSubmit }) {
   );
 }
 
+// หน้าขออีเมลสำหรับตั้งรหัสผ่านใหม่ โดยแสดงผลสำเร็จหรือข้อผิดพลาดจากระบบ
 function ForgotPassword({ go, onSubmit }) {
   const { t } = useLocalizedText();
   const [email, setEmail] = useState('');
@@ -528,6 +534,7 @@ function ForgotPassword({ go, onSubmit }) {
   );
 }
 
+// หน้ากำหนดรหัสผ่านใหม่ ตรวจสอบความยาวและการยืนยันรหัสก่อนบันทึก
 function ResetPassword({ go, onSubmit }) {
   const { t } = useLocalizedText();
   const [password, setPassword] = useState('');
@@ -596,6 +603,7 @@ function ResetPassword({ go, onSubmit }) {
   );
 }
 
+// หน้าหลัก แสดงคำทักทาย ช่องค้นหา ทางลัดฟีเจอร์ และการใช้งานล่าสุด
 function Home({ go, goBack, user, profile, onSearch, onReturnToAdmin, isAdminUserMode }) {
   const { t } = useLocalizedText();
   const [query, setQuery] = useState('');
@@ -672,6 +680,7 @@ function Home({ go, goBack, user, profile, onSearch, onReturnToAdmin, isAdminUse
   );
 }
 
+// หน้าแชต Medical AI ส่งคำถาม แสดงคำตอบพร้อมแหล่งอ้างอิง และให้ลองส่งซ้ำเมื่อผิดพลาด
 function MedicalAI({ go, goBack, onHistory }) {
   const { t } = useLocalizedText();
   const [msg, setMsg] = useState('');
@@ -757,6 +766,7 @@ function MedicalAI({ go, goBack, onHistory }) {
   );
 }
 
+// หน้าค้นหายา แสดงผลการค้นหาแบบแบ่งหน้า และเปิดดูรายละเอียดของยาที่เลือก
 function DrugSafety({ go, goBack, onSelectDrug, initialQuery = '', onHistory }) {
   const { t } = useLocalizedText();
   const callbacksRef = useRef({ onHistory, t });
@@ -934,6 +944,7 @@ function DrugSafety({ go, goBack, onSelectDrug, initialQuery = '', onHistory }) 
   );
 }
 
+// หน้าแสดงรายละเอียดและคำเตือนของยาที่เลือก พร้อมบันทึกหรือยกเลิกรายการโปรด
 function DrugDetail({ go, goBack, selectedDrug, userId, onToggleSave }) {
   const drug = selectedDrug || {};
   const itemId = `${drug.drug_name || ''}:${drug.source || ''}`;
@@ -1004,6 +1015,7 @@ function DrugDetail({ go, goBack, selectedDrug, userId, onToggleSave }) {
   );
 }
 
+// หน้าเส้นทางปลอดภัย ใช้ตำแหน่ง GPS ค้นหาปลายทาง แสดงเส้นทางจริงและประเมินความเสี่ยง
 function SafeRoute({ go, goBack, onHistory }) {
   const [loading, setLoading] = useState(false);
   const [searchLoading, setSearchLoading] = useState(false);
@@ -1378,6 +1390,7 @@ function SafeRoute({ go, goBack, onHistory }) {
   );
 }
 
+// หน้าโปรไฟล์ แสดงข้อมูลบัญชีและเมนูไปยังข้อมูลส่วนตัว ประวัติ รายการบันทึก และการตั้งค่า
 function Profile({ go, goBack, user, profile, onLogout }) {
   const { t } = useLocalizedText();
   const displayName = profile?.full_name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || t('user');
@@ -1416,6 +1429,7 @@ function Profile({ go, goBack, user, profile, onLogout }) {
   );
 }
 
+// หน้าแก้ไขข้อมูลส่วนตัวและข้อมูลสุขภาพ พร้อมตรวจสอบรูปแบบก่อนบันทึก
 function PersonalInfo({ go, goBack, user, profile, onSaved }) {
   const { t } = useLocalizedText();
   const [values, setValues] = useState({ ...profile, email: profile?.email || user?.email || '' });
@@ -1441,6 +1455,7 @@ function PersonalInfo({ go, goBack, user, profile, onSaved }) {
   </ScrollView></SafeAreaView>;
 }
 
+// หน้าประวัติการใช้งานของผู้ใช้ โหลดข้อมูลจากระบบและรองรับการดึงข้อมูลใหม่
 function History({ go, goBack, userId }) {
   const { t } = useLocalizedText();
   const [items, setItems] = useState([]); const [loading, setLoading] = useState(true); const [refreshing, setRefreshing] = useState(false); const [error, setError] = useState('');
@@ -1451,6 +1466,7 @@ function History({ go, goBack, userId }) {
   </ScrollView></SafeAreaView>;
 }
 
+// หน้ารายการที่บันทึกไว้ แสดงข้อมูลและให้ผู้ใช้ลบรายการออกจากบัญชี
 function Saved({ go, goBack, userId, onChanged }) {
   const { t } = useLocalizedText();
   const [items, setItems] = useState([]); const [loading, setLoading] = useState(true); const [error, setError] = useState('');
@@ -1462,6 +1478,7 @@ function Saved({ go, goBack, userId, onChanged }) {
   </ScrollView></SafeAreaView>;
 }
 
+// หน้าตั้งค่า เปิดหรือปิดการแจ้งเตือน เปลี่ยนภาษา และไปยังหน้าจัดการการเตือน
 function Settings({ go, goBack, userId, onLanguageChange }) {
   const { t } = useLocalizedText();
   const [settings, setSettings] = useState(null); const [loading, setLoading] = useState(true); const [error, setError] = useState('');
@@ -1490,6 +1507,7 @@ function getLocalDateInputValue() {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 }
 
+// หน้าจัดการการเตือน ตั้งเวลาและรูปแบบการทำซ้ำ พร้อมแก้ไข เปิดปิด หรือลบรายการ
 function Reminders({ go, goBack, userId }) {
   const { t } = useLocalizedText(); const [items, setItems] = useState([]); const [title, setTitle] = useState(''); const [date, setDate] = useState(getLocalDateInputValue); const [time, setTime] = useState('09:00'); const [type, setType] = useState('medication'); const [repeat, setRepeat] = useState('none'); const [editing, setEditing] = useState(null); const [error, setError] = useState('');
   const load = useCallback(async () => { const r = await getReminders(userId); if (r.error) setError(r.error.message); else setItems(r.data || []); }, [userId]);
@@ -1621,6 +1639,7 @@ function Reminders({ go, goBack, userId }) {
   return <SafeAreaView style={styles.screen}><Header title={t('reminders')} go={go} goBack={goBack} /><ScrollView contentContainerStyle={styles.content}>{error ? <Text style={styles.errorBox}>{error}</Text> : null}<TextInput style={styles.input} placeholder={t('reminderTitle')} value={title} onChangeText={setTitle}/><TextInput style={styles.input} placeholder="YYYY-MM-DD" value={date} onChangeText={setDate}/><TextInput style={styles.input} placeholder="HH:mm" value={time} onChangeText={setTime}/><View style={{flexDirection:'row',gap:6}}>{['medication','appointment','general'].map((v)=><Pressable key={v} onPress={()=>setType(v)}><Text style={styles.link}>{t(v)}{type===v?' ✓':''}</Text></Pressable>)}</View><View style={{flexDirection:'row',gap:6}}>{['none','daily','weekly','monthly'].map((v)=><Pressable key={v} onPress={()=>setRepeat(v)}><Text style={styles.link}>{t(v)}{repeat===v?' ✓':''}</Text></Pressable>)}</View><Button title={editing ? t('saveReminder') : t('addReminder')} onPress={create}/>{items.map((item)=><View style={styles.infoBlock} key={item.id}><Text style={styles.cardTitle}>{item.title}</Text><Text style={styles.muted}>{item.reminder_date} {item.reminder_time} · {t(item.reminder_type)} · {t(item.repeat_type)}</Text><View style={{flexDirection:'row',gap:8}}><Switch value={item.enabled} onValueChange={()=>toggle(item)}/><Pressable onPress={()=>edit(item)}><Text style={styles.link}>{t('editReminder')}</Text></Pressable><Pressable onPress={()=>remove(item)}><Text style={styles.link}>{t('removeItem')}</Text></Pressable></View></View>)}</ScrollView></SafeAreaView>;
 }
 
+// หน้าเกี่ยวกับแอป แสดงเวอร์ชัน คำอธิบาย แหล่งข้อมูลยา และข้อจำกัดทางการแพทย์
 function About({ go, goBack }) {
   const { t } = useLocalizedText();
   return <SafeAreaView style={styles.screen}><Header title={t('about')} go={go} goBack={goBack} /><ScrollView contentContainerStyle={styles.content}><Logo /><Text style={styles.heroTitle}>{t('appName')}</Text><Text style={styles.centerText}>{t('appSubtitle')}</Text><View style={styles.infoBlock}><Text style={styles.cardTitle}>{t('appVersion')}</Text><Text style={styles.muted}>{appPackage.version}</Text></View><View style={styles.infoBlock}><Text style={styles.cardTitle}>{t('appDescription')}</Text><Text style={styles.muted}>{t('appDescriptionText')}</Text></View><View style={styles.infoBlock}><Text style={styles.cardTitle}>{t('drugSources')}</Text><Text style={styles.muted}>{t('drugSourcesText')}</Text></View><Text style={styles.errorBox}>{t('medicalDisclaimer')}</Text></ScrollView></SafeAreaView>;
@@ -1671,6 +1690,7 @@ function BottomNav({ active, go }) {
   );
 }
 
+// หน้าแดชบอร์ดผู้ดูแล แสดงสถิติจาก Supabase และจำกัดการเข้าถึงเฉพาะบัญชี Admin
 function AdminDashboard({ go, goBack, profile, onLogout, onUseUserMode }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -1718,6 +1738,7 @@ function AdminDashboard({ go, goBack, profile, onLogout, onUseUserMode }) {
   </SafeAreaView>;
 }
 
+// คอมโพเนนต์หลัก จัดการการยืนยันตัวตน ภาษา ประวัติการนำทาง และเลือกหน้าตามเส้นทางปัจจุบัน
 export default function App() {
   const [language, setLanguage] = useState(DEFAULT_LANGUAGE);
   const languageRef = useRef(language);

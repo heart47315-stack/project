@@ -191,6 +191,7 @@ async function scheduleMissingNotifications(rows, reminderBody) {
   }
 }
 
+// หน้าจัดการงานสุขภาพ แสดงรายการตามวัน ปฏิทิน หรือประวัติ และจัดการสถานะกับการแจ้งเตือน
 export default function HealthTasksScreen({
   userId,
   language = 'th',

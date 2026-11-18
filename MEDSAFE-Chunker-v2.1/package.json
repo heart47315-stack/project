@@ -1,0 +1,16 @@
+{
+  "name": "medsafe-chunker",
+  "version": "2.1.0-rebuilt",
+  "private": true,
+  "description": "Local Unicode-aware chunker for MEDSAFE AI RAG ingestion",
+  "license": "UNLICENSED",
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "build": "node scripts/build-n8n.js",
+    "build:check": "node scripts/build-n8n.js --check",
+    "test": "npm run build:check && node --test test/*.test.js",
+    "fuzz": "node test/fuzz.js",
+    "report": "node test/report.js",
+    "audit": "node test/overlap-audit.js"
+  }
+}

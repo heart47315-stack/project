@@ -1,84 +1,188 @@
 import { supabase } from '../lib/supabase';
 import { normalizeCitations } from './medicalKnowledge';
 
-const FUNCTION_NAME = 'ai-chat';
-
-function getAnswer(payload) {
-  if (typeof payload === 'string') return payload.trim();
-  return String(payload?.answer || payload?.message || payload?.content || payload?.data?.answer || '').trim();
+function getWebhookUrl() {
+  return process.env.EXPO_PUBLIC_N8N_WEBHOOK_URL;
 }
 
-function getCitations(payload) {
-  const raw = payload?.citations || payload?.sources || payload?.references || [];
-  return normalizeCitations(raw);
+function getSupabasePublicKey() {
+  return (
+    process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+    process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY
+  );
+}
+
+function isProductionWebhookUrl(value) {
+  if (!value) return false;
+
+  try {
+    const url = new URL(value);
+    return (
+      url.protocol === 'https:' &&
+      !url.username &&
+      !url.password &&
+      url.pathname.includes('/webhook/') &&
+      !url.pathname.includes('/webhook-test/')
+    );
+  } catch {
+    return false;
+  }
 }
 
 function toHistory(history) {
-  const items = Array.isArray(history) ? history : [];
-  return items
+  return (Array.isArray(history) ? history : [])
     .filter((item) => item && typeof item.text === 'string' && item.text.trim())
     .slice(-12)
-    .map(({ me, text }) => ({
-      role: me ? 'user' : 'assistant',
-      content: text.slice(0, 4000),
+    .map((item) => ({
+      role: item.me ? 'user' : 'assistant',
+      content: item.text.slice(0, 4000),
     }));
 }
 
-function getErrorStatus(error) {
-  return error?.context?.status || error?.status || error?.context?.response?.status || null;
+function getRoot(payload) {
+  return Array.isArray(payload) ? payload[0] : payload;
 }
 
-async function invokeChat(accessToken, trimmedQuestion, history) {
-  return supabase.functions.invoke(FUNCTION_NAME, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-    body: {
-      message: trimmedQuestion,
-      question: trimmedQuestion,
-      history: toHistory(history),
+function getAnswer(payload) {
+  const root = getRoot(payload);
+  if (typeof root === 'string') return root.trim();
+
+  const candidates = [
+    root?.answer,
+    root?.output,
+    root?.message,
+    root?.text,
+    root?.response,
+    root?.data?.answer,
+    root?.data?.output,
+    root?.data?.message,
+  ];
+  const answer = candidates.find(
+    (value) => typeof value === 'string' && value.trim()
+  );
+
+  return answer?.trim() || '';
+}
+
+function getCitations(payload) {
+  const root = getRoot(payload);
+  const raw =
+    root?.citations ??
+    root?.sources ??
+    root?.references ??
+    root?.data?.citations ??
+    [];
+
+  return normalizeCitations(Array.isArray(raw) ? raw : []);
+}
+
+async function callN8n(webhookUrl, token, question, history, sessionId) {
+  const publicKey = getSupabasePublicKey();
+  const response = await fetch(webhookUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+      ...(publicKey ? { apikey: publicKey } : {}),
     },
+    body: JSON.stringify({
+      message: question,
+      question,
+      chatInput: question,
+      history: toHistory(history),
+      sessionId: `medsafe-${sessionId}`,
+    }),
   });
+
+  const raw = await response.text();
+  let payload;
+  try {
+    payload = JSON.parse(raw);
+  } catch {
+    payload = raw;
+  }
+
+  if (!response.ok) {
+    const root = getRoot(payload);
+    const message =
+      root?.error?.message ||
+      root?.error ||
+      root?.message ||
+      `n8n API error: HTTP ${response.status}`;
+    throw Object.assign(new Error(String(message)), { status: response.status });
+  }
+
+  return payload;
 }
 
 export async function sendMedicalQuestion(question, history = []) {
   const trimmedQuestion = String(question || '').trim();
-  if (!trimmedQuestion) return { error: { message: 'กรุณาพิมพ์คำถามก่อนส่ง' } };
+  const webhookUrl = getWebhookUrl();
+  if (!trimmedQuestion) {
+    return { error: { message: 'กรุณาพิมพ์คำถามก่อนส่ง' } };
+  }
+  if (trimmedQuestion.length > 2000) {
+    return { error: { message: 'คำถามยาวเกิน 2,000 ตัวอักษร' } };
+  }
+  if (!isProductionWebhookUrl(webhookUrl)) {
+    return {
+      error: { message: 'ยังไม่ได้ตั้งค่า n8n Production Webhook URL ที่ถูกต้อง' },
+    };
+  }
+
   try {
-    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-    const accessToken = sessionData?.session?.access_token;
-    if (sessionError || !accessToken) {
-      return { error: { message: 'กรุณาเข้าสู่ระบบก่อนใช้งาน Medical AI' } };
+    const { data: sessionData, error: sessionError } =
+      await supabase.auth.getSession();
+    let session = sessionData?.session;
+    if (sessionError || !session?.access_token) {
+      return {
+        error: { message: 'กรุณาเข้าสู่ระบบก่อนใช้งาน Medical AI' },
+      };
     }
 
-    let { data: payload, error } = await invokeChat(accessToken, trimmedQuestion, history);
+    let payload;
+    try {
+      payload = await callN8n(
+        webhookUrl,
+        session.access_token,
+        trimmedQuestion,
+        history,
+        session.user.id
+      );
+    } catch (error) {
+      if (error.status !== 401) throw error;
 
-    if (error && getErrorStatus(error) === 401) {
-      const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
-      const refreshedToken = refreshed?.session?.access_token;
-      if (refreshError || !refreshedToken) {
-        return { error: { message: 'เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่ก่อนใช้งาน Medical AI' } };
+      const { data: refreshed, error: refreshError } =
+        await supabase.auth.refreshSession();
+      session = refreshed?.session;
+      if (refreshError || !session?.access_token) {
+        return {
+          error: { message: 'เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่' },
+        };
       }
-      ({ data: payload, error } = await invokeChat(refreshedToken, trimmedQuestion, history));
-    }
 
-    if (error) {
-      let message = error.message || 'ส่งคำถามไม่สำเร็จ';
-      try {
-        const details = await error.context?.json?.();
-        message = details?.error?.message || details?.error || details?.message || message;
-      } catch {
-      }
-      if (/openai api error|invalid api key|unauthorized|authentication required|forbidden/i.test(message)) {
-        message = 'คำขอ Medical AI ต้องยืนยันสิทธิ์จาก Supabase ก่อนใช้งาน และหากมีข้อผิดพลาดด้าน key ให้ตรวจสอบ Edge Function secrets';
-      }
-      return { error: { message } };
+      payload = await callN8n(
+        webhookUrl,
+        session.access_token,
+        trimmedQuestion,
+        history,
+        session.user.id
+      );
     }
 
     const answer = getAnswer(payload);
-    if (!answer) return { error: { message: 'เซิร์ฟเวอร์ไม่ส่งข้อความตอบกลับมา' } };
+    if (!answer) {
+      return { error: { message: 'n8n ไม่ได้ส่งข้อความตอบกลับมา' } };
+    }
 
-    const citations = getCitations(payload);
-    return { data: { answer, citations } };
-  } catch {
-    return { error: { message: 'เชื่อมต่อ Medical AI ไม่ได้ กรุณาตรวจสอบ endpoint และอินเทอร์เน็ต' } };
+    return { data: { answer, citations: getCitations(payload) } };
+  } catch (error) {
+    console.error('MEDSAFE n8n error:', error);
+    return {
+      error: {
+        message:
+          error.message || 'เชื่อมต่อ n8n ไม่สำเร็จ กรุณาตรวจสอบ Workflow',
+      },
+    };
   }
 }
